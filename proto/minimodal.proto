@@ -1,14 +1,25 @@
 syntax = "proto3";
+
 package minimodal;
 
-service Greeter {
-    rpc SayHello (HelloRequest) returns (HelloReply);
+service MiniModal {
+    rpc SendRustFile (RustFileRequest) returns (RustFileResponse);
+    rpc RunFunction (RunFunctionRequest) returns (RunFunctionResponse);
 }
 
-message HelloRequest {
-   string name = 1;
+message RustFileRequest {
+    bytes rust_file = 1;
 }
 
-message HelloReply {
-    string message = 1;
+message RustFileResponse {
+    int32 status = 1;
+}
+
+message RunFunctionRequest {
+    string function_id = 1;
+    string inputs = 2;
+}
+
+message RunFunctionResponse {
+    string result = 1;
 }
