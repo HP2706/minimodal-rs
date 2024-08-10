@@ -1,0 +1,12 @@
+[package]
+name = "minimidal-rs"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+remote_execute_macro = { path = "./remote_execute_macro" }
+serde = "1.0.205"
+serde_closure = "0.3.3"
+serde_json = "1.0.122"
+tokio = "1.39.2"
+tonic = "0.12.1"
