@@ -91,9 +91,3 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
-
-// Add this test function at the end of the file
-#[no_mangle]
-pub extern "C" fn test_function(input: String) -> String {
-    format!("Hello, {}! This is a test function.", input)
-}
