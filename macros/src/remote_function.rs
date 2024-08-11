@@ -22,22 +22,19 @@ impl Parse for MacroInput {
     }
 }
 
-
 pub fn remote_function_impl(args: TokenStream, input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemFn);
     let ItemFn { sig, vis, block, attrs } = input;
 
     let statements = block.stmts;
     let function_identifier = sig.ident.clone();
-    
     quote! {
         #(#attrs)*
         #vis #sig {
+            use minimodal_proto::proto::minimodal::mini_modal_client::MiniModalClient;
             use base64::{Engine as _, engine::general_purpose};
             use tonic::Request;
-
-            println!("running on {:?}", n_cpus);
-
+            let mut client = MiniModalClient::connect("http://[::1]:50051").await?;
             // 1. Send the current file to the remote machine
             let file_content = "
             fn main() {
@@ -46,25 +43,17 @@ pub fn remote_function_impl(args: TokenStream, input: TokenStream) -> TokenStrea
             ";
             let encoded_content = general_purpose::STANDARD.encode(file_content);
             let rust_file_request = RustFileRequest {
-                rust_file: encoded_content,
+                rust_file: encoded_content.into(),
             };
-            let _response: RustFileResponse = tonic::client::Grpc::new(channel)
-                .rust_file(Request::new(rust_file_request))
-                .await?;
-
-            /* // 2. Run the function on the remote machine
-            let run_request = RunFunctionRequest {
-                function_id: stringify!(#function_identifier).to_string(),
-                inputs: format!("{:?}", (#(#statements),*)),
-            };
-            let response: RunFunctionResponse = tonic::client::Grpc::new(channel)
-                .run_function(Request::new(run_request))
-                .await?;
-
-            // 3. Return the result
-            let result = serde_json::from_str(&response.result).unwrap();
-            println!("Result: {:?}", result); */
+                    // Run a function
+            let request = Request::new(RunFunctionRequest {
+                function_id: "hello".to_string(),
+                inputs: "".to_string(),
+            });
+            let response = client.run_function(request).await?;
+            println!("RunFunction Response: {:?}", response);
             Ok(())
         }
     }.into()
 }
+

@@ -5,7 +5,7 @@ use minimodal_proto::proto::minimodal::{
 use tonic::{IntoRequest, Request};
 use minimodal_proto::proto::minimodal::mini_modal_client::MiniModalClient;
 use base64::{Engine as _, engine::general_purpose};
-
+use macros::remote_function;
 
 
 async fn test() -> Result<(), Box<dyn std::error::Error>> {
@@ -32,12 +32,19 @@ fn hello() {
     let response = client.run_function(request).await?;
     println!("RunFunction Response: {:?}", response);
 
+    
+    Ok(())
+}
 
+
+#[remote_function]
+async fn lala() -> Result<(), Box<dyn std::error::Error>> {
+    println!("lala");
     Ok(())
 }
 
 
 #[tokio::main]
 async fn main() {
-    test().await;
+    lala().await;
 }
