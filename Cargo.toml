@@ -11,14 +11,19 @@ path = "src/server/server.rs"
 name = "minimodal-app"
 path = "src/app.rs"
 
+
 [dependencies]
-prost = "0.13.1"
+minimodal_proto = { path = "./minimodal_proto" }
 remote_execute_macro = { path = "./remote_execute_macro" }
+dlopen = "0.1.8"
+dlopen_derive = "0.1.4"
+prost = "0.13.1"
 serde = "1.0.205"
 serde_closure = "0.3.3"
 serde_json = "1.0.122"
 tokio = { version = "1.39.2", features = ["full"] }
 tonic = "0.12.1"
+tonic-build = "0.9"
 
 [build-dependencies]
 tonic-build = "0.9"

@@ -2,14 +2,15 @@ use std::fs;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tonic::{transport::Server, Request, Response, Status};
-
-use minimodal::{RustFileRequest, RustFileResponse, RunFunctionRequest, RunFunctionResponse};
-pub mod minimodal {
-    tonic::include_proto!("minimodal"); // The string specified here must match the proto package name
-}
-
-use crate::minimodal::mini_modal_server::{MiniModal, MiniModalServer};
-
+use minimodal_proto::proto::minimodal::{
+    RustFileRequest, 
+    RustFileResponse, 
+    RunFunctionRequest, 
+    RunFunctionResponse
+};
+use minimodal_proto::proto::minimodal::mini_modal_server::{
+    MiniModal, MiniModalServer
+};
 struct MiniModalService {
     script_path: Arc<Mutex<String>>,
 }
