@@ -1,5 +1,5 @@
 [package]
-name = "remote_execute_macro"
+name = "macros"
 version = "0.1.0"
 edition = "2021"
 
@@ -17,6 +17,7 @@ tokio = { version = "1.0", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tonic-build = "0.9"
-base64 = "0.21"
+base64 = "0.22.1"
+
 
 

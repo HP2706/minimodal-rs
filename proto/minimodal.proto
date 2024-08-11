@@ -13,6 +13,7 @@ message RustFileRequest {
 
 message RustFileResponse {
     int32 status = 1;
+    string error_message = 2;
 }
 
 message RunFunctionRequest {
@@ -22,4 +23,5 @@ message RunFunctionRequest {
 
 message RunFunctionResponse {
     string result = 1;
+    string error_message = 2;  
 }

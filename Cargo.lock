@@ -141,12 +141,6 @@ dependencies = [
 
 [[package]]
 name = "base64"
-version = "0.21.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9d297deb1925b89f2ccc13d7635fa0714f12c87adce1c75356b39ca9b7178567"
-
-[[package]]
-name = "base64"
 version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
@@ -522,6 +516,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a7a70ba024b9dc04c27ea2f0c0548feb474ec5c54bba33a7f72f873a39d07b24"
 
 [[package]]
+name = "macros"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "minimodal_proto",
+ "proc-macro2 1.0.86",
+ "prost 0.11.9",
+ "quote 1.0.36",
+ "serde",
+ "serde_json",
+ "syn 2.0.72",
+ "tokio",
+ "tonic",
+ "tonic-build",
+]
+
+[[package]]
 name = "matchit"
 version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -543,11 +554,12 @@ checksum = "6877bb514081ee2a7ff5ef9de3281f14a4dd4bceac4c09388074a6b5df8a139a"
 name = "minimodal-rs"
 version = "0.1.0"
 dependencies = [
+ "base64",
  "dlopen",
  "dlopen_derive",
+ "macros",
  "minimodal_proto",
  "prost 0.13.1",
- "remote_execute_macro",
  "serde",
  "serde_closure",
  "serde_json",
@@ -885,23 +897,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a66a03ae7c801facd77a29370b4faec201768915ac14a721ba36f20bc9c209b"
 
 [[package]]
-name = "remote_execute_macro"
-version = "0.1.0"
-dependencies = [
- "base64 0.21.7",
- "minimodal_proto",
- "proc-macro2 1.0.86",
- "prost 0.11.9",
- "quote 1.0.36",
- "serde",
- "serde_json",
- "syn 2.0.72",
- "tokio",
- "tonic",
- "tonic-build",
-]
-
-[[package]]
 name = "rustc-demangle"
 version = "0.1.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1146,7 +1141,7 @@ dependencies = [
  "async-stream",
  "async-trait",
  "axum",
- "base64 0.22.1",
+ "base64",
  "bytes",
  "h2",
  "http",
