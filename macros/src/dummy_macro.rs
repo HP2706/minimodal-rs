@@ -8,35 +8,36 @@ use minimodal_proto::proto::minimodal::{
     RunFunctionRequest, 
     RunFunctionResponse
 };
-
+use syn::__private::ToTokens;
+use crate::utils::parse_result_type;
 
 pub fn dummy_impl(args: TokenStream, input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemFn);
     let ItemFn { sig, vis, block, attrs } = input;
 
-    let arg_names: Vec<_> = sig.inputs.iter().filter_map(|arg| {
-        if let syn::FnArg::Typed(pat_type) = arg {
-            if let syn::Pat::Ident(pat_ident) = &*pat_type.pat {
-                Some(pat_ident.ident.clone())
-            } else {
-                None
-            }
-        } else {
-            None
-        }
-    }).collect();
+    let return_type = match &sig.output {
+        syn::ReturnType::Default => "()".to_string(),
+        syn::ReturnType::Type(_, ty) => quote!(#ty).to_string(),
+    };
+
+    let return_type_str = return_type.to_string();
+    let left_type = if let Some(left_type) = parse_result_type(&return_type_str.clone()) {
+        syn::parse_str::<syn::Type>(&left_type).expect("Failed to parse left_type")
+    } else {
+        panic!("Invalid return type: {}", return_type_str);
+    };
+
+
 
     quote! {
         #(#attrs)*
         #vis #sig {
-            use serde_json;
-            
-            let args = serde_json::json!({
-                #(stringify!(#arg_names): #arg_names),*
-            });
-            let serialized_args = serde_json::to_string(&args)?;
-            println!("serialized_args: {:?}", serialized_args);
-            Ok(())
-        }
+            let success = "1".to_string();
+            println!("success: {:?}", success);
+            println!("left_type: {:?}", stringify!(#left_type));
+            let result: #left_type = serde_json::from_str(&success)?;
+            println!("result: {:?}", result);
+            return Ok(result);
+        }   
     }.into()
 }

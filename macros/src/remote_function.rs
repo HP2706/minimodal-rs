@@ -3,6 +3,7 @@ use quote::quote;
 use syn::{parse_macro_input, parse_str, Type, ItemFn, parse::Parse, parse::ParseStream};
 use base64::{Engine as _, engine::general_purpose};
 use syn::__private::ToTokens;
+use crate::utils::parse_result_type;
 struct MacroInput {
     debug_arg: syn::Expr,
 }
@@ -45,7 +46,7 @@ pub fn remote_function_impl(args: TokenStream, input: TokenStream) -> TokenStrea
     } else {
         panic!("Invalid return type: {}", return_type_str);
     };
-    let left_type = left_type.to_token_stream().to_string();
+
 
     quote! {
         #(#attrs)*
@@ -59,7 +60,7 @@ pub fn remote_function_impl(args: TokenStream, input: TokenStream) -> TokenStrea
             use minimodal_rs::utils::{get_dependencies, serialize_inputs}; 
 
             let mut client = MiniModalClient::connect("http://[::1]:50051").await?;
-            println!("left type: {}", #left_type);
+            println!("left type: {}", stringify!(#left_type));
 
 
             // 1. Send the current file to the remote machine
@@ -100,17 +101,4 @@ pub fn remote_function_impl(args: TokenStream, input: TokenStream) -> TokenStrea
             }
         }
     }.into()
-}
-
-
-
-pub fn parse_result_type(s: &str) -> Option<String> {
-    let s = s.trim();
-    let s = s.replace(" ", "");
-    if s.starts_with("Result<") && s.ends_with(",Error>") {
-        let inner = &s[7..s.len() - 7];
-        Some(inner.to_string())
-    } else {
-        None
-    }
 }

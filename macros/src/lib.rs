@@ -1,7 +1,7 @@
 use proc_macro::TokenStream;
 mod remote_function;
 mod dummy_macro;
-
+mod utils;
 
 #[proc_macro_attribute]
 pub fn remote_function(_args: TokenStream, input: TokenStream) -> TokenStream {
