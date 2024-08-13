@@ -9,6 +9,7 @@ service MiniModal {
 
 message RustFileRequest {
     bytes rust_file = 1;
+    repeated string dependencies = 2;
 }
 
 message RustFileResponse {
