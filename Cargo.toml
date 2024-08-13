@@ -26,6 +26,11 @@ tonic = "0.12.1"
 tonic-build = "0.9"
 base64 = "0.22.1"
 cargo_toml = "0.20.4"
+quote = "1.0.36"
+syn = { version = "2.0.72", features = ["full"] }
+erased-serde = "0.4.5"
+anyhow = "1.0.86"
+thiserror = "1.0.63"
 
 [build-dependencies]
 tonic-build = "0.9"

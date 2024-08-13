@@ -3,7 +3,7 @@
 
 use std::fs;
 use cargo_toml::{Manifest, Dependency};
-
+use serde::{Serialize, Deserialize};
 /// Basic way to find the Cargo.toml and parse the dependencies
 pub fn get_dependencies() -> Vec<String> {
     let mut current_dir = std::env::current_dir().expect("Failed to get current directory");
@@ -22,8 +22,6 @@ pub fn get_dependencies() -> Vec<String> {
     let manifest = Manifest::from_str(&cargo_toml_content)
         .expect("Failed to parse Cargo.toml");
 
-    // Extract dependencies
-    println!("Dependencies: {:?}", manifest.dependencies);
     let dependencies = manifest.dependencies
         .iter()
         .filter_map(|(name, dep)| {
@@ -42,3 +40,25 @@ pub fn get_dependencies() -> Vec<String> {
         .collect::<Vec<String>>();
     dependencies
 }
+
+
+pub fn serialize_inputs<'a>(
+    arg_names: &[&str], 
+    arg_values: &[&dyn erased_serde::Serialize]
+) -> Result<String, serde_json::Error> {
+    use serde_json::json;
+    
+    let mut map = serde_json::Map::new();
+    for (name, value) in arg_names.iter().zip(arg_values.iter()) {
+        map.insert(name.to_string(), json!(value));
+    }
+    
+    serde_json::to_string(&map)
+}
+
+pub fn deserialize_inputs<'a, T: Serialize + Deserialize<'a>>(
+    serialized_inputs: &'a str
+) -> Result<T, serde_json::Error> {
+    serde_json::from_str(serialized_inputs)
+}
+

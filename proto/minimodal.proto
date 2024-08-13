@@ -19,10 +19,13 @@ message RustFileResponse {
 
 message RunFunctionRequest {
     string function_id = 1;
-    string inputs = 2;
+    string serialized_inputs = 2;
+    string output_type = 3;
 }
 
 message RunFunctionResponse {
-    string result = 1;
-    string error_message = 2;  
+    oneof result {
+        string success = 1;
+        string error = 2;
+    }
 }

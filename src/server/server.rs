@@ -1,6 +1,4 @@
 use std::fs;
-use std::sync::Arc;
-use tokio::sync::Mutex;
 use tonic::{transport::Server, Request, Response, Status};
 use minimodal_proto::proto::minimodal::{
     RustFileRequest, 
@@ -8,6 +6,7 @@ use minimodal_proto::proto::minimodal::{
     RunFunctionRequest, 
     RunFunctionResponse
 };
+use minimodal_proto::proto::minimodal::run_function_response::Result as RunFunctionResult;
 use minimodal_proto::proto::minimodal::mini_modal_server::{
     MiniModal, MiniModalServer
 };
@@ -15,6 +14,7 @@ use base64; // Added for base64 decoding
 use base64::{Engine as _, alphabet, engine::{self, general_purpose}};
 use std::process::Command;
 use std::path::Path;
+use serde_json::{Value, json};
 
 struct MiniModalService {
     project_dir_path: String,
@@ -80,7 +80,6 @@ impl MiniModal for MiniModalService {
         };
 
         let dependencies = rust_file.dependencies;
-
 
         // Convert the decoded content to a string
         let rust_code = match String::from_utf8(decoded_content) {
@@ -159,77 +158,81 @@ impl MiniModal for MiniModalService {
         let original_code = fs::read_to_string(&main_file_path)
             .map_err(|e| Status::internal(format!("Failed to read Rust file: {}", e)))?;
 
-        // Create a new file with a main function that calls the requested function
+        let deserialized_inputs: Value = serde_json::from_str(&req.serialized_inputs)
+            .map_err(|e| Status::internal(format!("Failed to deserialize inputs: {}", e)))?;
+        // Modify the main function to return the result as JSON
+        let deps = "use serde_json::{json, Value};\nuse anyhow::Error;";
+
         let main_code = format!(
-            r#"
-{}
+            r#"//imports
+    {}
 
-#[tokio::main]
-async fn main() {{
-    let result = {}({}).await;
-    println!("{{:?}}", result);
-}}
-"#,
+    // Custom macro to print the result
+    macro_rules! print_result {{
+        ($result:expr) => {{
+            let json_result = match $result {{
+                Ok(value) => json!({{ "success": value }}),
+                Err(e) => json!({{ "error": e.to_string() }}),
+            }};
+            println!("RESULT_START{{}}RESULT_END", json_result);
+        }}
+    }}
+
+    //the original code
+    {}
+    #[tokio::main(flavor = "current_thread")]
+    async fn main() -> () {{
+        let inputs = serde_json::json!({});
+        let result: {} = {}(inputs).await;
+        print_result!(result);
+    }}
+    "#,
+            deps,
             original_code,
+            deserialized_inputs,
+            req.output_type,
             req.function_id,
-            req.inputs
         );
-
-        println!("👉 Writing main code {} to {}", main_file_path, main_code);
-        println!("current filecontents: {}", original_code);
 
         fs::write(main_file_path, main_code)
             .map_err(|e| Status::internal(format!("Failed to write temporary file: {}", e)))?;
 
-        // Compile the new Rust file
-        //cd into shadow dir
-        let output = std::process::Command::new("cd")
-            .arg(project_dir_path)
-            .arg("cargo")
+        // Compile and run the code
+        let output = std::process::Command::new("cargo")
+            .current_dir(&project_dir_path)
             .arg("run")
             .output()
-            .expect("Failed to compile Rust file");
-
+            .map_err(|e| Status::internal(format!("Failed to run cargo: {}", e)))?;
+        
         if !output.status.success() {
-            let error_message = format!(
-                "🚨 Compilation failed. Status: {}, Stderr: {}",
-                output.status,
-                String::from_utf8_lossy(&output.stderr)
-            );
-            println!("{}", error_message);
-            return Ok(Response::new(RunFunctionResponse {
-                result: String::new(),
-                error_message,
-            }));
+            let error_message = format!("cargo run failed: {}", String::from_utf8_lossy(&output.stderr));
+            return Err(Status::internal(error_message));
         }
 
-        println!("🏃‍ Running function: {}", req.function_id);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let mut result = stdout
+            .split("RESULT_START")
+            .nth(1)
+            .and_then(|s| s.split("RESULT_END").next())
+            .ok_or_else(|| Status::internal(format!("Failed to parse output: {}", stdout)))?;
 
-        // Run the compiled binary
-        let output = std::process::Command::new("/tmp/app")
-            .output()
-            .expect("Failed to execute command");
+        let json_result: serde_json::Value = serde_json::from_str(result)
+            .map_err(|e| Status::internal(format!("Failed to parse JSON: {}", e)))?;
 
-        if output.status.success() {
-            let result = String::from_utf8_lossy(&output.stdout).to_string();
-            println!("🏁 Result: {}", result);
-            Ok(Response::new(RunFunctionResponse { 
-                result,
-                error_message: String::new(),
-            }))
+        // Create the response based on the JSON structure
+        let response = if let Some(success) = json_result.get("success") {
+            RunFunctionResponse {
+                result: Some(RunFunctionResult::Success(success.to_string())),
+            }
+        } else if let Some(error) = json_result.get("error") {
+            RunFunctionResponse {
+                result: Some(RunFunctionResult::Error(error.to_string())),
+            }
         } else {
-            let error_message = format!(
-                "🚨 Function execution failed. Status: {}, Stderr: {}, Stdout: {}",
-                output.status,
-                String::from_utf8_lossy(&output.stderr),
-                String::from_utf8_lossy(&output.stdout)
-            );
-            println!("{}", error_message);
-            Ok(Response::new(RunFunctionResponse {
-                result: String::new(),
-                error_message,
-            }))
-        }
+            return Err(Status::internal("Invalid JSON result structure"));
+        };
+
+        Ok(Response::new(response))
     }
 }
 
