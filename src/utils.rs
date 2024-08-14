@@ -12,22 +12,24 @@ use tonic::Request;
 use std::collections::HashMap;
 use std::borrow::Cow;
 
-pub fn build_cargo_toml(cargo_toml_content : &mut String , metadata: &cargo_metadata::Metadata) -> Result<(), Error> {
+pub fn build_cargo_toml(cargo_toml_content : &mut Vec<u8> , metadata: &cargo_metadata::Metadata) -> Result<(), Error> {
     let dependencies = get_dependencies_from_cargo_toml(&metadata);
-
-    if !cargo_toml_content.contains("[dependencies]") {
-        *cargo_toml_content = format!("{}\n[dependencies]\n", cargo_toml_content.clone());
+    let mut cargo_toml_content_str = std::str::from_utf8_mut(cargo_toml_content).unwrap().to_string();
+    if !cargo_toml_content_str.contains("[dependencies]") {
+        cargo_toml_content_str = format!("{}\n[dependencies]\n", cargo_toml_content_str.clone());
     } else {
-        if let Some(deps_index) = cargo_toml_content.find("[dependencies]") {
-            *cargo_toml_content = format!("{}[dependencies]\n", &cargo_toml_content[..deps_index]);
+        if let Some(deps_index) = cargo_toml_content_str.find("[dependencies]") {
+            cargo_toml_content_str = format!("{}[dependencies]\n", &cargo_toml_content_str[..deps_index]);
         }
     }
     // Append new dependencies
-    *cargo_toml_content = format!("{}{}", cargo_toml_content, dependencies.join("\n"));
+    let content = format!("{}{}", cargo_toml_content_str, dependencies.join("\n"));
+    let a = content.into_bytes();
+    *cargo_toml_content = a;
     Ok(())
 }
 
-pub fn get_project_structure(filter_entries : Vec<String>) -> Result<HashMap<String, String>, Error> {
+pub fn get_project_structure(filter_entries : Vec<String>) -> Result<HashMap<String, Vec<u8>>, Error> {
     let metadata = MetadataCommand::new()
         .exec()?;
 
@@ -37,7 +39,7 @@ pub fn get_project_structure(filter_entries : Vec<String>) -> Result<HashMap<Str
         .git_ignore(true)
         .build();
 
-    let mut hashmap  = HashMap::new();
+    let mut hashmap : HashMap<String, Vec<u8>> = HashMap::new();
 
     for entry in walker.filter_map(Result::ok).filter_map(|entry| {
         let relative_path = entry.path().strip_prefix(&metadata.workspace_root).ok()?;
@@ -58,7 +60,6 @@ pub fn get_project_structure(filter_entries : Vec<String>) -> Result<HashMap<Str
             let path = entry.path();
             let relative_path = path.strip_prefix(&metadata.workspace_root)?;
             let content = std::fs::read(path)?;
-            let content = String::from_utf8_lossy(&content).to_string();
             hashmap.insert(relative_path.to_string_lossy().to_string(), content);
         }
     }
@@ -77,14 +78,14 @@ pub fn get_project_structure(filter_entries : Vec<String>) -> Result<HashMap<Str
     // Write dependencies to shadow Cargo.toml
     let cargo_toml_key = &cargo_toml_keys[0];
     let cargo_toml_content = match hashmap.get_mut(cargo_toml_key) {
-        Some(content) => content,
-        None => return Err(anyhow::anyhow!(format!("Cargo.toml key {} not found in keys {}", cargo_toml_key , hashmap.keys().map(|k| k.clone()).collect::<Vec<String>>().join(", "))))
+        Some(cargo_toml_content) => cargo_toml_content,
+        None => return Err(anyhow::anyhow!("Cargo.toml not found in the project")),
     };
     build_cargo_toml(cargo_toml_content, &metadata)?;
     Ok(hashmap)
 }
 
-pub fn mount_project(filter_entries : Vec<String>) -> Result<HashMap<String, String>, Error> {
+pub fn mount_project(filter_entries : Vec<String>) -> Result<HashMap<String, Vec<u8>>, Error> {
     let hashmap = get_project_structure(filter_entries)?;
     //TODO : implement some sort of caching here:
     Ok(hashmap)
