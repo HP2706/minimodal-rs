@@ -4,7 +4,7 @@ use std::time::Duration;
 use tokio;
 use tokio::time::sleep;
 use minimodal_proto::proto::minimodal::mini_modal_client::MiniModalClient;
-use minimodal_rs::utils::mount_project;
+use minimodal_rs::mount::mount_project;
 
 #[tokio::test]
 async fn test_grpc_server() {

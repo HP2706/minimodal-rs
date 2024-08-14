@@ -1,8 +1,10 @@
+
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{parse_macro_input, ItemFn, parse::Parse, parse::ParseStream};
 use base64::{Engine as _, engine::general_purpose};
 use crate::utils::extract_left_type;
+use minimodal_proto::proto::minimodal::{MountProjectRequest, MountProjectResponse};
 struct MacroInput {
     debug_arg: syn::Expr,
 }
@@ -15,8 +17,7 @@ impl Parse for MacroInput {
     }
 }
 
-pub fn remote_function_impl(args: TokenStream, input: TokenStream) -> TokenStream {
-    let encoded_content = general_purpose::STANDARD.encode(&input.to_string());
+pub fn remote_function_impl(fn_name: String, args: TokenStream, input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemFn);
     let ItemFn { sig, vis, block, attrs } = input;
 
@@ -47,20 +48,17 @@ pub fn remote_function_impl(args: TokenStream, input: TokenStream) -> TokenStrea
         #vis #sig {
             use minimodal_proto::proto::minimodal::mini_modal_client::MiniModalClient;
             use minimodal_proto::proto::minimodal::run_function_response::Result as RunFunctionResult;
+            use minimodal_proto::proto::minimodal::RunFunctionRequest;
             use tonic::Request;
             use serde_json;
             use serde::{Serialize, Deserialize};
             // we define get_dependencies in minimodal_rs
-            use minimodal_rs::utils::{get_dependencies, serialize_inputs}; 
+            use minimodal_rs::utils::{serialize_inputs}; 
+            use minimodal_rs::mount::mount_project;
 
             let mut client = MiniModalClient::connect("http://[::1]:50051").await?;
-
-            // 1. Send the current file to the remote machine
-            let request = RustFileRequest {
-                rust_file: #encoded_content.into(),
-                dependencies: get_dependencies(),
-            };
-            let response = client.send_rust_file(request).await?;
+            let req = mount_project(vec![".git".to_string()])?;
+            let response = client.mount_project(req).await;
 
             let serialized_inputs = serialize_inputs(
                 &[#(stringify!(#arg_names)),*], 

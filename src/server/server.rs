@@ -50,10 +50,10 @@ impl MiniModalService {
     // add dependencies to the shadow cargo project
     fn add_dependencies(dependencies: Vec<String>) {
         Command::new("cargo")
-            .arg("add")
-            .args(dependencies)
-            .output()
-            .expect("Failed to add dependencies");
+        .arg("add")
+        .args(dependencies)
+        .output()
+        .expect("Failed to add dependencies");
     }
 }
 
@@ -65,7 +65,6 @@ impl MiniModal for MiniModalService {
         request: Request<MountProjectRequest>,
     ) -> Result<Response<MountProjectResponse>, Status> {
         let req = request.into_inner();
-        println!("🔧 Mounting project: {:?}", req);
         let project_dir_path = self.project_dir_path.clone();
         let shadow_dir = format!("{}", project_dir_path);
 
@@ -99,16 +98,16 @@ impl MiniModal for MiniModalService {
         println!("📦 Loading app: {}", project_dir_path);
 
         // Correctly construct the path to the main.rs file
-        let main_file_path = format!("{}/src/main.rs", project_dir_path);
-        println!("👉 Reading main file from {}", main_file_path);
+        let original_main_file_path = format!("{}/src/original_main.rs", project_dir_path);
+        println!("👉 Reading main file from {}", original_main_file_path);
         // Read the original Rust file
-        let original_code = fs::read_to_string(&main_file_path)
+        let original_code = fs::read_to_string(&original_main_file_path)
             .map_err(|e| Status::internal(format!("Failed to read Rust file: {}", e)))?;
 
         let deserialized_inputs: Value = serde_json::from_str(&req.serialized_inputs)
             .map_err(|e| Status::internal(format!("Failed to deserialize inputs: {}", e)))?;
         // Modify the main function to return the result as JSON
-        let deps = "use serde_json::{json, Value};\nuse anyhow::Error;";
+        let deps = "use serde_json::{json, Value};\n";
 
         let main_code = format!(
             r#"//imports
@@ -140,14 +139,14 @@ impl MiniModal for MiniModalService {
             req.output_type,
             req.function_id,
         );
-
-        fs::write(main_file_path, main_code)
-            .map_err(|e| Status::internal(format!("Failed to write temporary file: {}", e)))?;
+        let main_file_path = format!("{}/src/main.rs", project_dir_path);
+        fs::write(&main_file_path, main_code)
+            .map_err(|e| Status::internal(format!("Failed to write file: {}", e)))?;
 
         // Compile and run the code
         let output = std::process::Command::new("cargo")
             .current_dir(&project_dir_path)
-            .arg("run")
+            .args(&["run", "--bin", "minimodal-rs"])
             .output()
             .map_err(|e| Status::internal(format!("Failed to run cargo: {}", e)))?;
         
@@ -178,6 +177,10 @@ impl MiniModal for MiniModalService {
         } else {
             return Err(Status::internal("Invalid JSON result structure"));
         };
+
+        //remove the main.rs file
+        fs::remove_file(main_file_path)
+            .map_err(|e| Status::internal(format!("Failed to remove temporary file: {}", e)))?;
 
         Ok(Response::new(response))
     }

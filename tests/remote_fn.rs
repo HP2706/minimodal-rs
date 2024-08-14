@@ -17,7 +17,7 @@ use tokio::time::sleep;
 #[tokio::test]
 async fn test_remote_basic_function() {
     // Start the server
-    let mut server = test_utils::start_server(None);
+    let mut server = test_utils::start_server(None).expect("Failed to start server");
 
     // Give the server some time to start up
     sleep(Duration::from_secs(2)).await;

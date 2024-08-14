@@ -27,13 +27,15 @@ tonic-build = "0.9"
 base64 = "0.22.1"
 cargo_toml = "0.20.4"
 quote = "1.0.36"
-syn = { version = "2.0.72", features = ["full"] }
+syn = { version = "2.0.72", features = ["full", "visit-mut"] }
 erased-serde = "0.4.5"
 anyhow = "1.0.86"
 thiserror = "1.0.63"
 cargo_metadata = "0.18.1"
 ignore = "0.4.22"
 walkdir = "2.5.0"
+toml = "0.8.19"
+prettyplease = "0.2.20"
 
 
 [build-dependencies]
