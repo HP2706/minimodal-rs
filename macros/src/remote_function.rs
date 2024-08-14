@@ -1,9 +1,8 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, parse_str, Type, ItemFn, parse::Parse, parse::ParseStream};
+use syn::{parse_macro_input, ItemFn, parse::Parse, parse::ParseStream};
 use base64::{Engine as _, engine::general_purpose};
-use syn::__private::ToTokens;
-use crate::utils::parse_result_type;
+use crate::utils::extract_left_type;
 struct MacroInput {
     debug_arg: syn::Expr,
 }
@@ -23,30 +22,25 @@ pub fn remote_function_impl(args: TokenStream, input: TokenStream) -> TokenStrea
 
     let fn_name = sig.ident.clone().to_string();
 
-    let arg_names: Vec<_> = sig.inputs.iter().filter_map(|arg| {
-        if let syn::FnArg::Typed(pat_type) = arg {
+        
+    let arg_names: Vec<_> = sig.inputs.iter()
+    .filter_map(|arg| match arg {
+        syn::FnArg::Typed(pat_type) => {
             if let syn::Pat::Ident(pat_ident) = &*pat_type.pat {
                 Some(pat_ident.ident.clone())
             } else {
                 None
             }
-        } else {
-            None
         }
-    }).collect();
+        _ => None
+    })
+    .collect();
 
     let return_type = match &sig.output {
         syn::ReturnType::Default => "()".to_string(),
         syn::ReturnType::Type(_, ty) => quote!(#ty).to_string(),
     };
-
-    let return_type_str = return_type.to_string();
-    let left_type = if let Some(left_type) = parse_result_type(&return_type_str.clone()) {
-        syn::parse_str::<syn::Type>(&left_type).expect("Failed to parse left_type")
-    } else {
-        panic!("Invalid return type: {}", return_type_str);
-    };
-
+    let left_type = extract_left_type(return_type.to_string());
 
     quote! {
         #(#attrs)*
@@ -60,8 +54,6 @@ pub fn remote_function_impl(args: TokenStream, input: TokenStream) -> TokenStrea
             use minimodal_rs::utils::{get_dependencies, serialize_inputs}; 
 
             let mut client = MiniModalClient::connect("http://[::1]:50051").await?;
-            println!("left type: {}", stringify!(#left_type));
-
 
             // 1. Send the current file to the remote machine
             let request = RustFileRequest {
@@ -78,8 +70,10 @@ pub fn remote_function_impl(args: TokenStream, input: TokenStream) -> TokenStrea
             let request = Request::new(RunFunctionRequest {
                 function_id: #fn_name.to_string(),
                 serialized_inputs,
-                output_type: #return_type_str.to_string()
+                output_type: #return_type.to_string()
             });
+
+            println!("request: {:?}", request);
 
             let response = client.run_function(request).await?.get_ref().result.clone();
 

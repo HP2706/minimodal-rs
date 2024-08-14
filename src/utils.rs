@@ -1,9 +1,9 @@
-
-
-
 use std::fs;
 use cargo_toml::{Manifest, Dependency};
 use serde::{Serialize, Deserialize};
+use syn::{Type, parse_str};
+use quote::ToTokens;
+
 /// Basic way to find the Cargo.toml and parse the dependencies
 pub fn get_dependencies() -> Vec<String> {
     let mut current_dir = std::env::current_dir().expect("Failed to get current directory");
@@ -41,7 +41,6 @@ pub fn get_dependencies() -> Vec<String> {
     dependencies
 }
 
-
 pub fn serialize_inputs<'a>(
     arg_names: &[&str], 
     arg_values: &[&dyn erased_serde::Serialize]
@@ -62,3 +61,22 @@ pub fn deserialize_inputs<'a, T: Serialize + Deserialize<'a>>(
     serde_json::from_str(serialized_inputs)
 }
 
+
+pub fn extract_left_type(return_type: String) -> syn::Type {
+    let parsed_type = syn::parse_str::<syn::Type>(&return_type)
+        .expect(&format!("Failed to parse return type: {}", return_type));
+    
+    if let syn::Type::Path(type_path) = &parsed_type {
+        if let Some(segment) = type_path.path.segments.last() {
+            if segment.ident == "Result" {
+                if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
+                    if let Some(syn::GenericArgument::Type(left_type)) = args.args.first() {
+                        return left_type.clone();
+                    }
+                }
+            }
+        }
+    }
+    
+    parsed_type
+}
