@@ -2,7 +2,58 @@ use std::fs;
 use cargo_toml::{Manifest, Dependency};
 use serde::{Serialize, Deserialize};
 use syn::{Type, parse_str};
-use quote::ToTokens;
+use anyhow::Error;
+use base64::{engine::general_purpose, Engine as _};
+use cargo_metadata::MetadataCommand;
+use ignore::WalkBuilder;
+use minimodal_proto::proto::minimodal::mini_modal_client::MiniModalClient;
+use std::path::PathBuf;
+use tonic::Request;
+
+
+pub fn mount_project(filter_entries : Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+    let metadata = MetadataCommand::new()
+    .no_deps()
+    .exec()?;
+
+
+    println!("name: {}", metadata.packages[0].name.clone());
+    println!("version: {}", metadata.packages[0].version.to_string());
+
+
+    // Walk through project files
+    let walker = WalkBuilder::new(&metadata.workspace_root)
+        .hidden(false)
+        .git_ignore(true)
+        .build();
+
+    for entry in walker.filter_map(Result::ok).filter_map(|entry| {
+        let relative_path = entry.path().strip_prefix(&metadata.workspace_root).ok()?;
+        let relative_path_str = relative_path.to_string_lossy().to_string();
+        
+        if filter_entries.iter().any(|filter| relative_path_str.starts_with(filter)) {
+            println!("Skipping: {}", relative_path_str);
+            None
+        } else {
+            Some(entry)
+        }
+    }) {
+        let path = entry.path();
+        let relative_path = path.strip_prefix(&metadata.workspace_root)?;
+        if filter_entries.contains(&relative_path.to_string_lossy().to_string()) {
+            continue;
+        }
+        if entry.file_type().map_or(false, |ft| ft.is_file()) {
+            let path = entry.path();
+            let relative_path = path.strip_prefix(&metadata.workspace_root)?;
+            println!("path: {}", relative_path.to_string_lossy().to_string());
+            let content = std::fs::read(path)?;
+            let encoded_content = general_purpose::STANDARD.encode(&content);
+        }
+    }
+    Ok(())
+}
+
 
 /// Basic way to find the Cargo.toml and parse the dependencies
 pub fn get_dependencies() -> Vec<String> {

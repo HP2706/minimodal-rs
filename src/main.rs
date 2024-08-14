@@ -7,7 +7,7 @@ use minimodal_proto::proto::minimodal::mini_modal_client::MiniModalClient;
 use base64::{Engine as _, engine::general_purpose};
 use macros::{remote_function, dummy_macro};
 use anyhow::Error;
-use minimodal_rs::utils::extract_left_type;
+use minimodal_rs::utils::{extract_left_type, mount_project};
 use quote::quote;
 
 #[remote_function]
@@ -20,8 +20,9 @@ where
 
 #[tokio::main]
 async fn main() -> () {
-    match lala::<i32>(1).await {
+    /* match lala::<i32>(1).await {
         Ok(r) => println!("Result: {:?}", r),
         Err(e) => println!("Error: {:?}", e),
-    }
+    } */
+    mount_project(vec![".git".to_string()]).unwrap();
 }
