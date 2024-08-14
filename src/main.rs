@@ -8,6 +8,7 @@ use base64::{Engine as _, engine::general_purpose};
 use macros::{remote_function, dummy_macro};
 use anyhow::Error;
 
+
 #[remote_function]
 async fn lala<'a, T>(a: T) -> Result<Vec<i32>, Error> 
 where
