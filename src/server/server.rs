@@ -115,7 +115,6 @@ impl MiniModal for MiniModalService {
 
         // Append new dependencies
         cargo_toml_content.push_str(&dependencies.join("\n"));
-        println!("cargo_toml_content: {}", cargo_toml_content);
         // Write updated content back to Cargo.toml
         fs::write(&shadow_cargo_toml_path, cargo_toml_content).map_err(|e| {
             let error_message = format!("Error writing to Cargo.toml: {}", e);
