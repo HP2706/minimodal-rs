@@ -1,6 +1,8 @@
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use macros::remote_function;
 use minimodal_proto::proto::minimodal::{
-    RustFileRequest, 
     RunFunctionRequest, 
 };
 use anyhow::Error;
@@ -9,18 +11,14 @@ use std::time::Duration;
 use tokio;
 use tokio::time::sleep;
 
-fn start_server() -> Child {
-    Command::new("cargo")
-        .args(["run", "--bin", "minimodal-server"])
-        .spawn()
-        .expect("Failed to start server")
-}
+
+
 
 #[tokio::test]
 async fn test_remote_basic_function() {
     // Start the server
-    let mut server = start_server();
-    
+    let mut server = test_utils::start_server(None);
+
     // Give the server some time to start up
     sleep(Duration::from_secs(2)).await;
 
@@ -40,5 +38,3 @@ async fn test_remote_basic_function() {
     // Shutdown the server
     server.kill().expect("Failed to kill server process");
 }
-
-

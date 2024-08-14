@@ -6,14 +6,14 @@ use anyhow::Error;
 use base64::{engine::general_purpose, Engine as _};
 use cargo_metadata::MetadataCommand;
 use ignore::WalkBuilder;
-use minimodal_proto::proto::minimodal::mini_modal_client::MiniModalClient;
+use minimodal_proto::proto::minimodal::{MountProjectRequest, FileEntry};
 use std::path::PathBuf;
 use tonic::Request;
 use std::collections::HashMap;
 use std::borrow::Cow;
 
-pub fn build_cargo_toml(cargo_toml_content : &mut Vec<u8> , metadata: &cargo_metadata::Metadata) -> Result<(), Error> {
-    let dependencies = get_dependencies_from_cargo_toml(&metadata);
+pub fn build_cargo_toml(cargo_toml_content : &mut Vec<u8>) -> Result<(), Error> {
+    let dependencies = get_dependencies();
     let mut cargo_toml_content_str = std::str::from_utf8_mut(cargo_toml_content).unwrap().to_string();
     if !cargo_toml_content_str.contains("[dependencies]") {
         cargo_toml_content_str = format!("{}\n[dependencies]\n", cargo_toml_content_str.clone());
@@ -81,23 +81,25 @@ pub fn get_project_structure(filter_entries : Vec<String>) -> Result<HashMap<Str
         Some(cargo_toml_content) => cargo_toml_content,
         None => return Err(anyhow::anyhow!("Cargo.toml not found in the project")),
     };
-    build_cargo_toml(cargo_toml_content, &metadata)?;
+    build_cargo_toml(cargo_toml_content)?;
     Ok(hashmap)
 }
 
-pub fn mount_project(filter_entries : Vec<String>) -> Result<HashMap<String, Vec<u8>>, Error> {
-    let hashmap = get_project_structure(filter_entries)?;
-    //TODO : implement some sort of caching here:
-    Ok(hashmap)
+pub fn mount_project(filter_entries: Vec<String>) -> Result<MountProjectRequest, Error> {
+    let hashmap = get_project_structure(filter_entries.clone())?;
+    
+    let files: Vec<FileEntry> = hashmap.into_iter()
+        .map(|(file_path, content)| FileEntry {
+            file_path,
+            content,
+        })
+        .collect();
+
+    Ok(MountProjectRequest {
+        files,
+    })
 }
 
-pub fn get_dependencies_from_cargo_toml(metadata: &cargo_metadata::Metadata) -> Vec<String> {
-    return metadata.packages.iter()
-        .map(|p| format!("{}={}", p.name.clone(), p.version.to_string()))
-        .collect::<Vec<String>>();    
-}
-
-/// Basic way to find the Cargo.toml and parse the dependencies
 /// Basic way to find the Cargo.toml and parse the dependencies
 pub fn get_dependencies() -> Vec<String> {
     let mut current_dir = std::env::current_dir().expect("Failed to get current directory");

@@ -1,12 +1,14 @@
 use std::fs;
 use tonic::{transport::Server, Request, Response, Status};
 use minimodal_proto::proto::minimodal::{
-    RustFileRequest, 
-    RustFileResponse, 
+    MountProjectResponse,
+    MountProjectRequest,
+    FileEntry,
     RunFunctionRequest, 
-    RunFunctionResponse
+    RunFunctionResponse,
 };
 use minimodal_proto::proto::minimodal::run_function_response::Result as RunFunctionResult;
+use minimodal_proto::proto::minimodal::mount_project_response::Result as MountProjectResult;
 use minimodal_proto::proto::minimodal::mini_modal_server::{
     MiniModal, MiniModalServer
 };
@@ -15,6 +17,7 @@ use base64::{Engine as _, alphabet, engine::{self, general_purpose}};
 use std::process::Command;
 use std::path::Path;
 use serde_json::{Value, json};
+use std::env;
 
 struct MiniModalService {
     project_dir_path: String,
@@ -56,88 +59,33 @@ impl MiniModalService {
 
 #[tonic::async_trait]
 impl MiniModal for MiniModalService {
-    async fn send_rust_file(
+    
+    async fn mount_project(
         &self,
-        request: Request<RustFileRequest>,
-    ) -> Result<Response<RustFileResponse>, Status> {
-        let rust_file = request.into_inner();
-        let mut project_dir_path = self.project_dir_path.clone();
-        
-        let main_file_path = format!("{}/src/main.rs", project_dir_path);
-        project_dir_path.push_str("/src/main.rs");
+        request: Request<MountProjectRequest>,
+    ) -> Result<Response<MountProjectResponse>, Status> {
+        let req = request.into_inner();
+        println!("🔧 Mounting project: {:?}", req);
+        let project_dir_path = self.project_dir_path.clone();
+        let shadow_dir = format!("{}", project_dir_path);
 
-        // Decode the base64 encoded Rust file content
-        let decoded_content = match general_purpose::STANDARD.decode(&rust_file.rust_file) {
-            Ok(content) => content,
-            Err(e) => {
-                let error_message = format!("Error decoding base64 content: {}", e);
-                eprintln!("{}", error_message);
-                return Ok(Response::new(RustFileResponse { 
-                    status: 1,
-                    error_message,
-                }));
+        for file_entry in req.files.into_iter() {
+            let file_path = file_entry.file_path;
+            let file_path = format!("{}/{}", shadow_dir, file_path);
+            // Create intermediate directories if they don't exist
+            if let Some(parent) = Path::new(&file_path).parent() {
+                fs::create_dir_all(parent)
+                    .map_err(|e| Status::internal(format!("Failed to create directories: {}", e)))?;
             }
-        };
-
-        let dependencies = rust_file.dependencies;
-
-        // Convert the decoded content to a string
-        let rust_code = match String::from_utf8(decoded_content) {
-            Ok(code) => code,
-            Err(e) => {
-                let error_message = format!("Error converting decoded content to string: {}", e);
-                eprintln!("{}", error_message);
-                return Ok(Response::new(RustFileResponse { 
-                    status: 1,
-                    error_message,
-                }));
-            }
-        };
-
-        // Write dependencies to shadow Cargo.toml
-        let shadow_cargo_toml_path = format!("{}/Cargo.toml", self.project_dir_path);
-        let mut cargo_toml_content = fs::read_to_string(&shadow_cargo_toml_path)
-            .map_err(|e| {
-                let error_message = format!("Error reading Cargo.toml: {}", e);
-                eprintln!("{}", error_message);
-                Status::internal(error_message)
-            })?;
-
-        // Find the [dependencies] section or add it if it doesn't exist
-        if !cargo_toml_content.contains("[dependencies]") {
-            cargo_toml_content.push_str("\n[dependencies]\n");
-        } else {
-            // If [dependencies] exists, ensure we're appending after it
-            let deps_index = cargo_toml_content.find("[dependencies]").unwrap();
-            cargo_toml_content.truncate(deps_index + 14); // 14 is the length of "[dependencies]"
-            cargo_toml_content.push('\n');
-        }
-
-        // Append new dependencies
-        cargo_toml_content.push_str(&dependencies.join("\n"));
-        // Write updated content back to Cargo.toml
-        fs::write(&shadow_cargo_toml_path, cargo_toml_content).map_err(|e| {
-            let error_message = format!("Error writing to Cargo.toml: {}", e);
-            eprintln!("{}", error_message);
-            Status::internal(error_message)
-        })?;
-
-        match fs::write(&*main_file_path, rust_code) {
-            Ok(_) => Ok(Response::new(RustFileResponse { 
-                status: 0,
-                error_message: "".to_string(),
-            })),
-            Err(e) => {
-                let error_message = format!("Error writing file: {}", e);
-                eprintln!("{}", error_message);
-                Ok(Response::new(RustFileResponse { 
-                    status: 1,
-                    error_message,
-                }))
+            match fs::write(file_path, file_entry.content) {
+                Ok(_) => (),
+                Err(e) => return Err(Status::internal(format!("Failed to write file: {}", e))),
             }
         }
 
-
+        Ok(Response::new(MountProjectResponse {
+            result: Some(MountProjectResult::Success("Mounted project".to_string())),
+        }))
     }
 
     async fn run_function(
@@ -209,7 +157,7 @@ impl MiniModal for MiniModalService {
         }
 
         let stdout = String::from_utf8_lossy(&output.stdout);
-        let mut result = stdout
+        let result = stdout
             .split("RESULT_START")
             .nth(1)
             .and_then(|s| s.split("RESULT_END").next())
@@ -240,7 +188,14 @@ impl MiniModal for MiniModalService {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let addr = "[::1]:50051".parse()?;
-    let service = MiniModalService::new("src/server/project".to_string());
+
+    let args: Vec<String> = env::args().collect();
+    let dirname = args.iter().position(|arg| arg == "-dirname")
+        .and_then(|index| args.get(index + 1))
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| "src/server/shadow_dir".to_string());
+    println!("🔧 Shadow dir: {}", dirname);
+    let service = MiniModalService::new(dirname);
 
     println!("🎬 Starting up minimodal server");
     println!(" Listening on {}", addr);

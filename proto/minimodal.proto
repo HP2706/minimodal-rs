@@ -3,18 +3,24 @@ syntax = "proto3";
 package minimodal;
 
 service MiniModal {
-    rpc SendRustFile (RustFileRequest) returns (RustFileResponse);
+    rpc MountProject (MountProjectRequest) returns (MountProjectResponse);
     rpc RunFunction (RunFunctionRequest) returns (RunFunctionResponse);
 }
 
-message RustFileRequest {
-    bytes rust_file = 1;
-    repeated string dependencies = 2;
+message MountProjectRequest {
+    repeated FileEntry files = 1;
 }
 
-message RustFileResponse {
-    int32 status = 1;
-    string error_message = 2;
+message FileEntry {
+    string file_path = 1;
+    bytes content = 2;
+}
+
+message MountProjectResponse {
+    oneof result {
+        string success = 1;
+        string error = 2;
+    }
 }
 
 message RunFunctionRequest {
