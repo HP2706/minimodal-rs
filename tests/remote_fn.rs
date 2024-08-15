@@ -1,7 +1,7 @@
 #[path = "test_utils.rs"]
 mod test_utils;
 
-use macros::remote_function;
+use macros::function;
 use minimodal_proto::proto::minimodal::{
     RunFunctionRequest, 
 };
@@ -22,7 +22,7 @@ async fn test_remote_basic_function() {
     // Give the server some time to start up
     sleep(Duration::from_secs(2)).await;
 
-    #[remote_function]
+    #[function]
     async fn lala<'a, T>(a: T) -> Result<Vec<i32>, Error> 
     where
         T: serde::de::Deserialize<'a> + serde::Serialize,

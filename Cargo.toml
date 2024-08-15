@@ -7,12 +7,8 @@ edition = "2021"
 name = "minimodal-server"
 path = "src/server/server.rs"
 
-[[bin]] # Bin to run the HelloWorld gRPC client
-name = "minimodal-app"
-path = "src/app.rs"
-
-
 [dependencies]
+basemodules = { path = "./basemodules" }
 minimodal_proto = { path = "./minimodal_proto" }
 macros = { path = "./macros" }
 dlopen = "0.1.8"
@@ -36,6 +32,8 @@ ignore = "0.4.22"
 walkdir = "2.5.0"
 toml = "0.8.19"
 prettyplease = "0.2.20"
+derive_builder = "0.20.0"
+once_cell = "1.19.0"
 
 
 [build-dependencies]

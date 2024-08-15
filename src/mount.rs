@@ -61,7 +61,7 @@ pub fn handle_main_rs(work_space_root : PathBuf) -> Result<Vec<u8>, Error> {
     //TODO find a way to avoid manually adding the macro names here
     remove_macro(
         &mut ast, 
-        vec!["remote_function".to_string(), "mount".to_string()]
+        vec!["function".to_string(), "mount".to_string()]
     );
 
     remove_function(

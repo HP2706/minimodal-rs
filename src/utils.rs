@@ -1,5 +1,8 @@
 use serde::{Serialize, Deserialize};
 
+pub fn test() {
+    println!("test");
+}
 
 pub fn serialize_inputs<'a>(
     arg_names: &[&str], 
