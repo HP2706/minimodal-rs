@@ -150,6 +150,7 @@ name = "basemodules"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "erased-serde",
  "serde",
 ]
 
@@ -719,6 +720,7 @@ dependencies = [
  "base64",
  "basemodules",
  "cargo_toml",
+ "darling",
  "minimodal_proto",
  "once_cell",
  "proc-macro2 1.0.86",

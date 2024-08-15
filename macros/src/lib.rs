@@ -1,17 +1,24 @@
 use proc_macro::TokenStream;
 mod function;
+mod function_experiment;
 mod mount_macro;
 mod utils;
+mod args;
 
 #[proc_macro_attribute]
 pub fn function(_args: TokenStream, input: TokenStream) -> TokenStream {
     function::function_impl( _args, input)
 }
 
+#[proc_macro_attribute]
+pub fn function_experiment(_args: TokenStream, input: TokenStream) -> TokenStream {
+    function_experiment::function_experiment_impl(_args, input)
+}
+
 //for debug
 #[proc_macro_attribute]
 pub fn mount(_args: TokenStream, input: TokenStream) -> TokenStream {
-    mount_macro::mount_impl("mount".to_string(), _args, input)
+    mount_macro::mount_impl( _args, input)
 }
 
 /* ,

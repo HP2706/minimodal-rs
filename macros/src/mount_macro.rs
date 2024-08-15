@@ -1,10 +1,8 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, ItemFn, parse_file, File, Item, visit_mut::VisitMut};
+use syn::{parse_macro_input, ItemFn};
 
-
-
-pub fn mount_impl(macro_name : String, args: TokenStream, input: TokenStream) -> TokenStream {
+pub fn mount_impl(args: TokenStream, input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemFn);
     let ItemFn { sig, vis, block, attrs } = input;
 

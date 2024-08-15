@@ -6,3 +6,4 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.76"
 serde = "1.0.205"
+erased-serde = "0.4.5"
