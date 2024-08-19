@@ -150,7 +150,7 @@ name = "basemodules"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "erased-serde",
+ "async-trait",
  "serde",
 ]
 
@@ -757,6 +757,7 @@ name = "minimodal-rs"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "base64",
  "basemodules",
  "cargo_metadata",

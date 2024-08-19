@@ -16,23 +16,6 @@ pub fn build_cargo_toml(
     let mut manifest = Manifest::from_str(&cargo_toml_content_str)
         .expect("Failed to parse Cargo.toml");
 
-    //TODO is something like this needed?
-    /* manifest.bin.iter_mut().for_each(|product| {
-        if let Some(path) = &mut product.path {
-            *path = path.replace(old_root_path, new_root_path);
-        }
-    });
-
-    manifest.dependencies.iter_mut().for_each(|(_, dep)| {
-        if let Dependency::Detailed(detail) = dep {
-            if let Some(path) = &mut detail.path {
-                *path = path.replace(old_root_path, new_root_path);
-            }
-        }
-    }); */
-
-
-
     let modified_toml = toml::to_string(&manifest)?;
 
     // Update the cargo_toml_content with the new TOML string
@@ -121,11 +104,9 @@ pub fn get_project_structure(filter_entries : Vec<String>) -> Result<HashMap<Str
             )
         ),
     };
-    build_cargo_toml(
-        cargo_toml_content
-        //&metadata.workspace_root.to_string(),
-        //&current_dir.to_string_lossy().to_string()
-    )?;
+
+    //pass mutable reference of cargo_toml_content to build_cargo_toml
+    build_cargo_toml(cargo_toml_content)?;
     Ok(hashmap)
 }
 
