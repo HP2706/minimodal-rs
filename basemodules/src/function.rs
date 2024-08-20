@@ -3,15 +3,17 @@ use std::any::Any;
 use std::fmt::Debug;
 use serde::{Serialize, Deserialize};
 use std::future::Future;
+use anyhow::Result;
 
-// Define a trait for the input and output types
-//#[typetag::serde(tag = "type")]
+
 pub trait Function<I, O>
 where
     I: Serialize + for<'de> Deserialize<'de> + Send + Sync + Any + Debug + 'static,
     O: Serialize + for<'de> Deserialize<'de> + Send + Sync + Any + Debug + 'static,
 {
-    type Output: Future<Output = O> + Send;
+    type LocalOutput: Future<Output = O> + Send;
+    //type RemoteOutput: Future<Output = Result<O, anyhow::Error>> + Send;
 
-    fn local(input: I) -> Self::Output;
+    fn local(input: I) -> Self::LocalOutput;
+    //fn remote(input: I) -> Self::RemoteOutput;
 }
