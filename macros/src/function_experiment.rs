@@ -1,7 +1,6 @@
 use proc_macro::TokenStream;
 use quote::{quote, format_ident};
 use syn::{parse_macro_input, ItemFn, Signature, ReturnType, Type};
-
 pub fn function_experiment_impl(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let input = parse_macro_input!(item as ItemFn);
@@ -10,9 +9,13 @@ pub fn function_experiment_impl(_attr: TokenStream, item: TokenStream) -> TokenS
     let vis = &input.vis;
     let block = &input.block;
     let inputs = &input.sig.inputs;
-    let where_clause = &input.sig.generics.where_clause;
+    let mut where_clause = &input.sig.generics.where_clause;
     let generics = &input.sig.generics;
 
+    let orig_output_type = match &input.sig.output {
+        ReturnType::Default => quote!(()),
+        ReturnType::Type(_, ty) => quote!(#ty),
+    };
 
     let (output_type, is_async, return_type) = match &input.sig.output {
         ReturnType::Default => (quote!(()), false, quote!(())),
@@ -20,7 +23,7 @@ pub fn function_experiment_impl(_attr: TokenStream, item: TokenStream) -> TokenS
             match &**ty {
                 Type::Path(type_path) if type_path.path.segments.last().unwrap().ident == "Future" => {
                     let inner_type = &type_path.path.segments.last().unwrap().arguments;
-                    (quote!(#ty), true, quote!(#inner_type))
+                    (quote!(std::pin::Pin<Box<dyn Future<Output = #inner_type> + Send + 'static>>), true, quote!(#inner_type))
                 },
                 _ => (quote!(std::future::Ready<#ty>), false, quote!(#ty)),
             }
@@ -62,8 +65,7 @@ pub fn function_experiment_impl(_attr: TokenStream, item: TokenStream) -> TokenS
     }; 
 
     // we collect A, B, .. in <A, B, ..>
-    
-    let mut generic_type_params = generics.params.iter().filter_map(|param| {
+    let generic_type_params = generics.params.iter().filter_map(|param| {
         if let syn::GenericParam::Type(type_param) = param {
             Some(type_param.ident.clone())
         } else {
@@ -71,29 +73,10 @@ pub fn function_experiment_impl(_attr: TokenStream, item: TokenStream) -> TokenS
         }
     }).collect::<Vec<syn::Ident>>();
 
-    let (generic_type_params, additional_where_clause) = if generic_type_params.len() == 1 {
-        let new_type = format_ident!("__B");
-        let existing_type = &generic_type_params[0];
-        (
-            vec![existing_type.clone(), new_type.clone()],
-            quote! { #new_type: std::convert::From<#existing_type> }
-        )
-    } else {
-        (generic_type_params, quote!())
-    };
-
-    let where_clause = if let Some(existing_where) = where_clause {
-        quote! { #existing_where #additional_where_clause }
-    } else if !additional_where_clause.is_empty() {
-        quote! { where #additional_where_clause }
-    } else {
-        quote!()
-    };
-
     let expanded: TokenStream = quote! {
         #struct_def
 
-        impl<#(#generic_type_params),*> Function<#(#generic_type_params),*> for #struct_name #generics
+        impl<#(#generic_type_params),*> Function<#(#generic_type_params),*, #orig_output_type> for #struct_name #generics
         #where_clause
         {
             #local_impl
