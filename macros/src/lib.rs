@@ -5,10 +5,10 @@ mod mount_macro;
 mod utils;
 mod args;
 
-#[proc_macro_attribute]
+/* #[proc_macro_attribute]
 pub fn function(_args: TokenStream, input: TokenStream) -> TokenStream {
     function::function_impl( _args, input)
-}
+} */
 
 #[proc_macro_attribute]
 pub fn function_experiment(_args: TokenStream, input: TokenStream) -> TokenStream {

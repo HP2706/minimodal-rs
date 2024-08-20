@@ -57,6 +57,18 @@ impl MiniModalService {
     }
 }
 
+fn generate_function_args(inputs: &serde_json::Value) -> String {
+    match inputs {
+        serde_json::Value::Object(map) => {
+            map.iter()
+                .map(|(_ , value)| format!("{}", serde_json::to_string(value).unwrap()))
+                .collect::<Vec<String>>()
+                .join(", ")
+        }
+        _ => "inputs.clone()".to_string(), // Fallback for non-object inputs
+    }
+}
+
 #[tonic::async_trait]
 impl MiniModal for MiniModalService {
     
@@ -100,6 +112,7 @@ impl MiniModal for MiniModalService {
         // Correctly construct the path to the main.rs file
         let original_main_file_path = format!("{}/src/original_main.rs", project_dir_path);
         println!("👉 Reading main file from {}", original_main_file_path);
+
         // Read the original Rust file
         let original_code = fs::read_to_string(&original_main_file_path)
             .map_err(|e| Status::internal(format!("Failed to read Rust file: {}", e)))?;
@@ -124,12 +137,19 @@ impl MiniModal for MiniModalService {
         }}
     }}
 
-    //the original code
+    // the original code
     {}
     #[tokio::main(flavor = "current_thread")]
     async fn main() -> () {{
-        let inputs = serde_json::json!({});
-        let result: {} = {}(inputs).await;
+        let inputs: serde_json::Value = serde_json::json!({});
+        
+        let result: {} = match {}(
+            {}
+        ).await {{
+            Ok(res) => Ok(res),
+            Err(e) => Err(e),
+        }};
+        
         print_result!(result);
     }}
     "#,
@@ -138,6 +158,7 @@ impl MiniModal for MiniModalService {
             deserialized_inputs,
             req.output_type,
             req.function_id,
+            generate_function_args(&deserialized_inputs),
         );
         let main_file_path = format!("{}/src/main.rs", project_dir_path);
         fs::write(&main_file_path, main_code)
@@ -152,6 +173,7 @@ impl MiniModal for MiniModalService {
         
         if !output.status.success() {
             let error_message = format!("cargo run failed: {}", String::from_utf8_lossy(&output.stderr));
+            println!("🔥 Error: {}", error_message);
             return Err(Status::internal(error_message));
         }
 
@@ -180,12 +202,15 @@ impl MiniModal for MiniModalService {
 
         //remove the main.rs file
         fs::remove_file(main_file_path)
-            .map_err(|e| Status::internal(format!("Failed to remove temporary file: {}", e)))?;
+            .map_err(
+                |e| 
+                Status::internal(format!("Failed to remove temporary file: {}", e))
+        )?;
 
+        println!("🔥 Response: {:?}", response);
         Ok(Response::new(response))
     }
 }
-
 
 // run server
 #[tokio::main]
