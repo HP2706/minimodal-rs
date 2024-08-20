@@ -1,11 +1,12 @@
 use proc_macro::TokenStream;
 use quote::{quote, format_ident};
 use syn::{parse_macro_input, ItemFn, Signature, ReturnType, Type};
+
 pub fn function_experiment_impl(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let input = parse_macro_input!(item as ItemFn);
-    let func_name = &input.sig.ident;
-    let mut struct_name = format_ident!("_{}", func_name.to_string());
+    let orig_func_name = &input.sig.ident;
+
     let vis = &input.vis;
     let block = &input.block;
     let inputs = &input.sig.inputs;
@@ -59,7 +60,7 @@ pub fn function_experiment_impl(_attr: TokenStream, item: TokenStream) -> TokenS
     });
 
     let struct_def = quote! {
-        #vis struct #struct_name #generics #where_clause {
+        #vis struct #orig_func_name #generics #where_clause {
             #(#phantom_fields)*
         }
     }; 
@@ -76,16 +77,14 @@ pub fn function_experiment_impl(_attr: TokenStream, item: TokenStream) -> TokenS
     let expanded: TokenStream = quote! {
         #struct_def
 
-        impl<#(#generic_type_params),*> Function<#(#generic_type_params),*, #orig_output_type> for #struct_name #generics
+        impl<#(#generic_type_params),*> Function<#(#generic_type_params),*, #orig_output_type> for #orig_func_name #generics
         #where_clause
         {
             #local_impl
         }
 
-        #input
     }.into();
 
-    println!("expanded: {}", expanded);
 
     TokenStream::from(expanded)
 }
