@@ -1,2 +1,2 @@
-mod remote_fn;
+mod function_macro;
 mod grpc_server;
