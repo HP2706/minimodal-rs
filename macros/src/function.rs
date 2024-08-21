@@ -2,8 +2,6 @@ use proc_macro::{TokenStream};
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, format_ident};
 use syn::{parse_macro_input, ItemFn, Signature, ReturnType, Type, FnArg, Ident,};
-use crate::utils::extract_left_type;
-
 
 pub fn function_impl(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let ItemFn { mut sig, vis, block, attrs } = parse_macro_input!(item as ItemFn);
@@ -26,7 +24,9 @@ pub fn function_impl(_attr: TokenStream, item: TokenStream) -> TokenStream {
         .collect();
 
     let (input_idents, input_types): (Vec<_>, Vec<_>) = input_args.iter().cloned().unzip();
-    let new_inp_type = quote! { (#(#input_types),*) };
+    
+    /// converting to tuple type
+    let new_inp_type = quote! { (#(#input_types),*) }; 
     
     let output_type = match &sig.output {
         ReturnType::Type(_, ty) => {
@@ -46,19 +46,24 @@ pub fn function_impl(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let is_async = sig.asyncness.is_some();
 
     //join the names of all input args
-    let new_input_ident = format_ident!("{}", input_idents.iter().map(|ident| ident.to_string()).collect::<Vec<String>>().join("_"));
+    let new_input_ident = format_ident!(
+        "{}", 
+        input_idents.iter()
+        .map(|ident| ident.to_string())
+        .collect::<Vec<String>>().join("_")
+    );
 
     let local_impl = if is_async {
         quote! {
-            type Output = Pin<Box<dyn Future<Output = #output_type> + Send + 'static>>;
-            fn local(#new_input_ident: #new_inp_type) -> Self::Output {
+            type LocalOutput = Pin<Box<dyn Future<Output = #output_type> + Send + 'static>>;
+            fn local(#new_input_ident: #new_inp_type) -> Self::LocalOutput {
                 Box::pin(async move { let (#(#input_idents),*) = #new_input_ident; #block })
             }
         }
     } else {
         quote! {
-            type Output = #output_type;
-            fn local(#new_input_ident: #new_inp_type) -> Self::Output {
+            type LocalOutput = #output_type;
+            fn local(#new_input_ident: #new_inp_type) -> Self::LocalOutput {
                 let (#(#input_idents),*) = #new_input_ident; #block
             }
         }
@@ -66,7 +71,8 @@ pub fn function_impl(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     // New code to handle Result types
     let remote_impl = quote! {
-        fn remote(#new_input_ident: #new_inp_type) -> Self::Output {
+        type RemoteOutput = Pin<Box<dyn Future<Output = #output_type> + Send + 'static>>;
+        fn remote(#new_input_ident: #new_inp_type) -> Self::RemoteOutput {
             Box::pin(async move { 
                 let (#(#input_idents),*) = #new_input_ident; 
                 #remote_block
@@ -87,9 +93,6 @@ pub fn function_impl(_attr: TokenStream, item: TokenStream) -> TokenStream {
         });
 
     let expanded = quote! {
-        use std::pin::Pin;
-        use std::future::Future;
-
         #vis struct #fn_name #generics #where_clause {
             #(#phantom_fields)*
         }
@@ -136,7 +139,6 @@ fn check_output_type(ty: &Type) {
     ()
 }
 
-
 pub fn impl_remote_block(
     name: &syn::Ident,
     arg_names: Vec<syn::Ident>,
@@ -174,7 +176,6 @@ pub fn impl_remote_block(
         let response = client.run_function(request).await
             .map_err(|e| MiniModalError::from(anyhow::Error::from(e)))?
             .get_ref().result.clone();
-
 
         match response {
             Some(RunFunctionResult::Success(success)) => {
