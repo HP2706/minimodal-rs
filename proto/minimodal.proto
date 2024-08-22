@@ -23,10 +23,17 @@ message MountProjectResponse {
     }
 }
 
+message name_and_type {
+    string name = 1;
+    string ty = 2;
+}
+
+
 message RunFunctionRequest {
     string function_id = 1;
     string serialized_inputs = 2;
-    string output_type = 3;
+    repeated name_and_type field_types = 3;
+    string output_type = 4;
 }
 
 message RunFunctionResponse {

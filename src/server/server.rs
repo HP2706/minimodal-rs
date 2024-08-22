@@ -1,3 +1,4 @@
+use crate::utilities::_declare_values_from_json;
 use std::fs;
 use tonic::{transport::Server, Request, Response, Status};
 use minimodal_proto::proto::minimodal::{
@@ -19,14 +20,14 @@ use std::path::Path;
 use serde_json::{Value, json};
 use std::env;
 
-struct MiniModalService {
+pub struct MiniModalService {
     project_dir_path: String,
 }
 
 
 impl MiniModalService {
 
-    fn new(project_dir_path: String) -> MiniModalService {
+    pub fn new(project_dir_path: String) -> MiniModalService {
         let service = MiniModalService {
             project_dir_path,
         };
@@ -36,7 +37,7 @@ impl MiniModalService {
     }
 
     // store the shadow cargo project in server/project
-    fn build_shadow_dir(&self) {
+    pub fn build_shadow_dir(&self) {
         let shadow_dir = self.project_dir_path.clone();
         if !Path::new(&shadow_dir).exists() {
             Command::new("cargo")
@@ -45,27 +46,6 @@ impl MiniModalService {
                 .output()
                 .expect("Failed to create shadow cargo project");
         }
-    }
-
-    // add dependencies to the shadow cargo project
-    fn add_dependencies(dependencies: Vec<String>) {
-        Command::new("cargo")
-        .arg("add")
-        .args(dependencies)
-        .output()
-        .expect("Failed to add dependencies");
-    }
-}
-
-fn generate_function_args(inputs: &serde_json::Value) -> String {
-    match inputs {
-        serde_json::Value::Object(map) => {
-            map.iter()
-                .map(|(_ , value)| format!("{}", serde_json::to_string(value).unwrap()))
-                .collect::<Vec<String>>()
-                .join(", ")
-        }
-        _ => "inputs.clone()".to_string(), // Fallback for non-object inputs
     }
 }
 
@@ -120,46 +100,56 @@ impl MiniModal for MiniModalService {
         let deserialized_inputs: Value = serde_json::from_str(&req.serialized_inputs)
             .map_err(|e| Status::internal(format!("Failed to deserialize inputs: {}", e)))?;
         // Modify the main function to return the result as JSON
-        let deps = "use serde_json::{json, Value};\n";
+
+        let str_field_types = req.field_types.iter().map(|field| (field.name.clone(), field.ty.clone())).collect::<Vec<(String, String)>>();
+
+        let let_declarations = _declare_values_from_json(
+            &deserialized_inputs, 
+            &str_field_types
+        ).map_err(|e| Status::internal(format!("Failed to declare values: {}", e)))?;
 
         let main_code = format!(
             r#"//imports
-    {}
+    
+    {original_code}
 
     // Custom macro to print the result
     macro_rules! print_result {{
         ($result:expr) => {{
             let json_result = match $result {{
-                Ok(value) => json!({{ "success": value }}),
-                Err(e) => json!({{ "error": e.to_string() }}),
+                Ok(value) => serde_json::json!({{ "success": value }}),
+                Err(e) => serde_json::json!({{ "error": e.to_string() }}),
             }};
             println!("RESULT_START{{}}RESULT_END", json_result);
         }}
     }}
 
     // the original code
-    {}
     #[tokio::main(flavor = "current_thread")]
-    async fn main() -> () {{
-        let inputs: serde_json::Value = serde_json::json!({});
+    async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {{
+        let inputs: serde_json::Value = serde_json::json!({deserialized_inputs});
         
-        let result: {} = match {}(
-            {}
+        {declarations}
+        let result: {output_type} = match {function_id}(
+            {args}
         ).await {{
             Ok(res) => Ok(res),
             Err(e) => Err(e),
         }};
         
         print_result!(result);
+        Ok(())
     }}
     "#,
-            deps,
-            original_code,
-            deserialized_inputs,
-            req.output_type,
-            req.function_id,
-            generate_function_args(&deserialized_inputs),
+            original_code=original_code,
+            deserialized_inputs=deserialized_inputs,
+            declarations=let_declarations,
+            args=format!("{}", str_field_types.iter().map(|field| format!("{}", field.0)).collect::<Vec<String>>().join(", ")),
+            output_type=req.output_type,
+            function_id=req.function_id,
         );
+
+        println!("👉 Writing {} main file to {}",project_dir_path, main_code);
         let main_file_path = format!("{}/src/main.rs", project_dir_path);
         fs::write(&main_file_path, main_code)
             .map_err(|e| Status::internal(format!("Failed to write file: {}", e)))?;
@@ -167,7 +157,7 @@ impl MiniModal for MiniModalService {
         // Compile and run the code
         let output = std::process::Command::new("cargo")
             .current_dir(&project_dir_path)
-            .args(&["run", "--bin", "minimodal-rs"])
+            .args(&["run", "--bin", "minimodal_rs"])
             .output()
             .map_err(|e| Status::internal(format!("Failed to run cargo: {}", e)))?;
         
@@ -210,28 +200,4 @@ impl MiniModal for MiniModalService {
         println!("🔥 Response: {:?}", response);
         Ok(Response::new(response))
     }
-}
-
-// run server
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let addr = "[::1]:50051".parse()?;
-
-    let args: Vec<String> = env::args().collect();
-    let dirname = args.iter().position(|arg| arg == "-dirname")
-        .and_then(|index| args.get(index + 1))
-        .map(|s| s.to_string())
-        .unwrap_or_else(|| "src/server/shadow_dir".to_string());
-    println!("🔧 Shadow dir: {}", dirname);
-    let service = MiniModalService::new(dirname);
-
-    println!("🎬 Starting up minimodal server");
-    println!(" Listening on {}", addr);
-
-    Server::builder()
-        .add_service(MiniModalServer::new(service))
-        .serve(addr)
-        .await?;
-
-    Ok(())
 }

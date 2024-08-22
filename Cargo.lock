@@ -1145,7 +1145,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6877bb514081ee2a7ff5ef9de3281f14a4dd4bceac4c09388074a6b5df8a139a"
 
 [[package]]
-name = "minimodal-rs"
+name = "minimodal_proto"
+version = "0.1.0"
+dependencies = [
+ "dlopen",
+ "dlopen_derive",
+ "prost 0.13.1",
+ "serde",
+ "serde_closure",
+ "serde_json",
+ "tokio",
+ "tonic",
+ "tonic-build",
+]
+
+[[package]]
+name = "minimodal_rs"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -1177,21 +1192,6 @@ dependencies = [
  "tonic",
  "tonic-build",
  "walkdir",
-]
-
-[[package]]
-name = "minimodal_proto"
-version = "0.1.0"
-dependencies = [
- "dlopen",
- "dlopen_derive",
- "prost 0.13.1",
- "serde",
- "serde_closure",
- "serde_json",
- "tokio",
- "tonic",
- "tonic-build",
 ]
 
 [[package]]

@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use std::collections::HashMap;
 use toml;
 use crate::parse_file::{remove_macro, remove_function};
+
 pub fn build_cargo_toml(
     cargo_toml_content : &mut Vec<u8>,
 ) -> Result<(), Error> {

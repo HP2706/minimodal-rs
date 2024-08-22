@@ -1,11 +1,16 @@
 [package]
-name = "minimodal-rs"
+name = "minimodal_rs"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "minimodal_rs"
+path = "src/lib.rs"
+
+
 [[bin]] # Bin to run the HelloWorld gRPC server
 name = "minimodal-server"
-path = "src/server/server.rs"
+path = "src/server/main.rs"
 
 [dependencies]
 basemodules = { path = "./basemodules" }

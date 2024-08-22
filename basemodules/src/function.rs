@@ -6,8 +6,8 @@ use std::future::Future;
 
 pub trait Function<I, O>
 where
-    I: Serialize + for<'de> Deserialize<'de> + Send + Sync + Any + Debug + 'static,
-    O: Serialize + for<'de> Deserialize<'de> + Send + Sync + Any + Debug + 'static,
+    I: Serialize + for<'de> Deserialize<'de> + Send + Sync + Debug + 'static,
+    O: Serialize + for<'de> Deserialize<'de> + Send + Sync + Debug + 'static,
 {
     type LocalOutput: Future<Output = O> + Send;
     type RemoteOutput: Future<Output = O> + Send;

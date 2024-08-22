@@ -13,10 +13,11 @@ use std::future::Future;
 use basemodules::function::Function;
 use std::fmt::Debug;
 use rstest::*;
+use polars::prelude::*;
 
-async fn process_call<F>(call: F) -> bool
+async fn process_call<F, O>(call: F) -> bool
 where
-    F: Future<Output = Result<Vec<i32>, MiniModalError>>,
+    F: Future<Output = Result<O, MiniModalError>>,
 {
     match call.await {
         Ok(r) => true,
@@ -39,15 +40,35 @@ where
     Ok(vec![1, 2, 3])
 }
 
+#[function]
+async fn multi_arg(a: i32, b: i32) -> Result<Vec<i32>, MiniModalError> {
+    Ok(vec![a, b])
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct PolarsDataFrame(DataFrame);
+
+#[function]
+async fn df_test_deserialize(df: PolarsDataFrame) -> Result<PolarsDataFrame, MiniModalError> {
+    println!("🔥 Result: {:?}", df);
+    Ok(df)
+}
+
 #[rstest]
-#[case::remote(lala::remote)]
-#[case::local(lala::local)]
+#[case::local((lala::<i32>::local, 1))]
+#[case::remote((lala::<i32>::remote, 1))]
+#[case::remote((df_test_deserialize::remote, PolarsDataFrame(DataFrame::new(vec![Series::new("col1", vec![1, 2, 3])]).unwrap())))]
+#[case::local((df_test_deserialize::local, PolarsDataFrame(DataFrame::new(vec![Series::new("col1", vec![1, 2, 3])]).unwrap())))]
+#[case::remote((multi_arg::remote, (1, 2)))]
+#[case::local((multi_arg::local, (1, 2)))]
 #[tokio::test]
-async fn test_lala_function<F>(#[future] server: Child, #[case] func: F)
+async fn test_function<I, O, F>(#[future] server: Child, #[case] func_input: (F, I))
 where
-    F: Fn(i32) -> Pin<Box<dyn Future<Output = Result<Vec<i32>, MiniModalError>> + Send>>,
+    I: Serialize + for<'de> Deserialize<'de> + Send + Sync + Debug + 'static,
+    O: Serialize + for<'de> Deserialize<'de> + Send + Sync + Debug + 'static,
+    F: Fn(I) -> Pin<Box<dyn Future<Output = Result<O, MiniModalError>> + Send + 'static>> + Send + 'static
 {
-    let result = process_call(func(1)).await;
+    let result = process_call((func_input.0)(func_input.1)).await;
     assert!(result);
     server.await.kill().expect("Failed to kill server process");
 }

@@ -25,8 +25,14 @@ pub fn function_impl(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let (input_idents, input_types): (Vec<_>, Vec<_>) = input_args.iter().cloned().unzip();
     
-    /// converting to tuple type
     let new_inp_type = quote! { (#(#input_types),*) }; 
+    // Create NameAndType structs for each input
+    let input_types_str = input_args.iter()
+        .map(
+            |(name, ty)| 
+            quote! { NameAndType { name: stringify!(#name).to_string(), ty: stringify!(#ty).to_string() } }
+        )
+        .collect::<Vec<_>>();
     
     let output_type = match &sig.output {
         ReturnType::Type(_, ty) => {
@@ -40,6 +46,7 @@ pub fn function_impl(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let remote_block = impl_remote_block(
         fn_name,
         input_idents.clone(),
+        input_types_str,
         output_type
     );
 
@@ -110,7 +117,6 @@ pub fn function_impl(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
 
 fn check_output_type(ty: &Type) {
-
     // Check if the output type is Result<_, MiniModalError>
     let is_valid_result_type = if let Type::Path(type_path) = &*ty {
         if let Some(last_segment) = type_path.path.segments.last() {
@@ -141,7 +147,8 @@ fn check_output_type(ty: &Type) {
 
 pub fn impl_remote_block(
     name: &syn::Ident,
-    arg_names: Vec<syn::Ident>,
+    args: Vec<syn::Ident>,
+    field_types: Vec<TokenStream2>,
     output_type: &syn::Type
 ) -> TokenStream2 {
 
@@ -153,21 +160,23 @@ pub fn impl_remote_block(
         use tonic::Request;
         use serde_json; 
         use serde::{Serialize, Deserialize};
-        use minimodal_rs::utils::serialize_inputs;
+        use minimodal_rs::utilities::serialize_inputs;
         use minimodal_rs::mount::mount_project;
+        use minimodal_proto::proto::minimodal::NameAndType;
 
         let mut client = MiniModalClient::connect("http://[::1]:50051").await?;
         let req = mount_project(vec![".git".to_string()])?;
         let _response = client.mount_project(req).await;
 
         let serialized_inputs = serialize_inputs(
-            &[#(stringify!(#arg_names)),*], 
-            &[#(&(#arg_names) as &dyn erased_serde::Serialize),*]
+            &[#(stringify!(#args)),*], 
+            &[#(&(#args) as &dyn erased_serde::Serialize),*]
         )?;
 
         let request = Request::new(RunFunctionRequest {
             function_id: stringify!(#name).to_string(),
-            serialized_inputs,
+            serialized_inputs: serialized_inputs,
+            field_types: vec![#(#field_types),*],
             output_type: stringify!(#output_type).to_string()
         });
 

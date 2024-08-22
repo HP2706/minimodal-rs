@@ -1,12 +1,12 @@
 use serde::{Serialize, Deserialize};
 use std::process::Command;
-use std::io::Write;
 use basemodules::MiniModalError;
 use anyhow::Result;
-use tempfile::NamedTempFile;
-use std::env;
 
-pub fn declare_values_from_json(json: serde_json::Value, arg_types: Vec<(String,String)>) -> Result<String, MiniModalError> {
+pub fn _declare_values_from_json(
+    json: &serde_json::Value, 
+    arg_types: &Vec<(String,String)>
+) -> Result<String, MiniModalError> {
     let mut values = Vec::new();
     let json_obj = json.as_object().ok_or(MiniModalError::SerializationError("json is not an object".to_string()))?;
     

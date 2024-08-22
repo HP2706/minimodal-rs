@@ -1,10 +1,8 @@
-#[path = "test_utils.rs"]
-mod test_utils;
+#[path = "utils_test.rs"]
 
-use minimodal_rs::utils::{declare_values_from_json, check_code_compiles};
+use minimodal_rs::utilities::{_declare_values_from_json, check_code_compiles};
 use rstest::*;
 use serde_json::json;
-use uuid::Uuid;
 
 
 #[rstest]
@@ -34,7 +32,7 @@ async fn test_declare_values_from_json_compiles(
         .map(|(k, v)| (k.to_string(), v.to_string()))
         .collect();
 
-    let output = declare_values_from_json(input_json, type_declarations).unwrap();
+    let output = _declare_values_from_json(&input_json, &type_declarations).unwrap();
 
     // Generate a unique function name for each test case
 
