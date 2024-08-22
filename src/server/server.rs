@@ -1,4 +1,4 @@
-use crate::utilities::_declare_values_from_json;
+use crate::utilities::{_declare_values_from_json, write_bin_file};
 use std::fs;
 use tonic::{transport::Server, Request, Response, Status};
 use minimodal_proto::proto::minimodal::{
@@ -149,15 +149,16 @@ impl MiniModal for MiniModalService {
             function_id=req.function_id,
         );
 
-        println!("👉 Writing {} main file to {}",project_dir_path, main_code);
-        let main_file_path = format!("{}/src/main.rs", project_dir_path);
-        fs::write(&main_file_path, main_code)
-            .map_err(|e| Status::internal(format!("Failed to write file: {}", e)))?;
-
+        let name = uuid::Uuid::new_v4().to_string();
+        println!("👉 Writing bin file to {}", project_dir_path);
+        let temp_file_path = write_bin_file(&name, &main_code, &project_dir_path.clone().into()) 
+            .map_err(|e| Status::internal(format!("Failed to write bin file: {}", e)))?;
+        
         // Compile and run the code
+        println!("project_dir_path: {}", project_dir_path);
         let output = std::process::Command::new("cargo")
             .current_dir(&project_dir_path)
-            .args(&["run", "--bin", "minimodal_rs"])
+            .args(&["run", "--bin", &name])
             .output()
             .map_err(|e| Status::internal(format!("Failed to run cargo: {}", e)))?;
         
@@ -190,12 +191,12 @@ impl MiniModal for MiniModalService {
             return Err(Status::internal("Invalid JSON result structure"));
         };
 
-        //remove the main.rs file
-        fs::remove_file(main_file_path)
+        /* //remove the temp.rs file
+        fs::remove_file(temp_file_path)
             .map_err(
                 |e| 
                 Status::internal(format!("Failed to remove temporary file: {}", e))
-        )?;
+        )?; */
 
         println!("🔥 Response: {:?}", response);
         Ok(Response::new(response))

@@ -1191,6 +1191,7 @@ dependencies = [
  "toml",
  "tonic",
  "tonic-build",
+ "uuid",
  "walkdir",
 ]
 

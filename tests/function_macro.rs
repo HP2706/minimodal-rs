@@ -70,5 +70,4 @@ where
 {
     let result = process_call((func_input.0)(func_input.1)).await;
     assert!(result);
-    server.await.kill().expect("Failed to kill server process");
 }

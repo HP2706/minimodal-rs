@@ -1,5 +1,6 @@
 use serde::{Serialize, Deserialize};
 use std::process::Command;
+use std::path::PathBuf;
 use basemodules::MiniModalError;
 use anyhow::Result;
 
@@ -56,29 +57,39 @@ pub fn check_code_compiles(code: String) -> Result<(bool, Option<String>)> {
         code
     );
 
-    let current_dir = std::env::current_dir()?;
-    // Create the src/bin directory if it doesn't exist
-    let bin_dir = current_dir.join("src").join("bin");
-    std::fs::create_dir_all(&bin_dir)?;
-    let temp_file_path = current_dir.join(bin_dir.join("temp.rs"));
-    
-    // Delete the contents of the file if it exists
-    if temp_file_path.exists() {
-        std::fs::write(&temp_file_path, "fn main() {}")?;
-    }
-    
-    // Write the new code to the file
-    std::fs::write(&temp_file_path, wrapped_code)?;
+    let name = uuid::Uuid::new_v4().to_string();
 
+    let current_dir = std::env::current_dir()?;
+    let temp_file_path = write_bin_file(&name, &wrapped_code, &current_dir)?;
     let compile_output = Command::new("cargo")
-        .args(["run", "--bin", "temp"])
+        .args(["run", "--bin", &name])
         .output()?;
 
-    //std::fs::remove_file(temp_file_path)?;
+    std::fs::remove_file(temp_file_path)?;
     
     if compile_output.status.success() {
         Ok((true, None))
     } else {
         Ok((false, Some(String::from_utf8_lossy(&compile_output.stderr).to_string())))
+    }
+}
+
+/// Writes a binary file to the src/bin directory
+/// name: the name of the file
+/// code: the code to write to the file
+pub fn write_bin_file(name: &str, code: &str, project_dir_path: &PathBuf) -> Result<PathBuf> {
+    let bin_dir = project_dir_path.join("src").join("bin");
+    std::fs::create_dir_all(&bin_dir)?;
+
+    let temp_file_path = bin_dir.join(format!("{}.rs", name));
+    println!("temp_file_path: {}", temp_file_path.display());
+
+    match std::fs::write(&temp_file_path, code) {
+        Ok(_) => Ok(temp_file_path),
+        Err(e) => {
+            let error_message = format!("Error writing file {}: {}", temp_file_path.display(), e);
+            println!("🔥 Error: {}", error_message);
+            Err(anyhow::anyhow!(error_message))
+        }
     }
 }
