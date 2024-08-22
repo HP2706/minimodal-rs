@@ -1,3 +1,5 @@
 /target
 src/main.rs
+*.rlib
 src/server/shadow_dir
+src/bin/temp.rs
