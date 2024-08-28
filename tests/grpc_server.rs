@@ -17,11 +17,6 @@ async fn test_grpc_server() {
     sleep(Duration::from_secs(2)).await;
 
     let mut client = MiniModalClient::connect("http://[::1]:50051").await.unwrap();
-    let req = mount_project(vec![".git".to_string(), "minimodal_proto".to_string(), "macros".to_string(), "src/server".to_string()]).unwrap();
-    let res = client.mount_project(req).await;
-    match res {
-        Ok(_) => println!("Mounted project successfully"),
-        Err(e) => panic!("Failed to mount project: {}", e),
-    }
+    let req = mount_project(&mut client, vec![".git".to_string(), "minimodal_proto".to_string(), "macros".to_string(), "src/server".to_string()]).await.unwrap();
     server.kill().expect("Failed to kill server");
 }

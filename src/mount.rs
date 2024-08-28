@@ -3,7 +3,13 @@ use cargo_toml::{Manifest, Dependency};
 use anyhow::Error;
 use cargo_metadata::MetadataCommand;
 use ignore::WalkBuilder;
-use minimodal_proto::proto::minimodal::{MountProjectRequest, FileEntry};
+use minimodal_proto::proto::minimodal::{
+    MountProjectRequest, 
+    FileEntry, 
+    MountProjectResponse, 
+    mini_modal_client::MiniModalClient
+};
+use tonic::transport::Channel;
 use std::path::PathBuf;
 use std::collections::HashMap;
 use toml;
@@ -111,12 +117,12 @@ pub fn get_project_structure(filter_entries : Vec<String>) -> Result<HashMap<Str
     Ok(hashmap)
 }
 
-pub fn mount_project(
+
+pub async fn mount_project(
+    client: &mut MiniModalClient<Channel>,
     filter_entries: Vec<String>,
-) -> Result<MountProjectRequest, Error> {
+) -> Result<MountProjectResponse, Error> {
     let hashmap = get_project_structure(filter_entries.clone())?;
-
-
 
     let files: Vec<FileEntry> = hashmap.into_iter()
         .map(|(file_path, content)| FileEntry {
@@ -125,9 +131,16 @@ pub fn mount_project(
         })
         .collect();
 
-    
-
-    Ok(MountProjectRequest {
+    let request = MountProjectRequest {
         files,
-    })
+    };
+
+    match client.mount_project(request).await {
+        Ok(response) => {
+            Ok(response.into_inner())
+        },
+        Err(e) => {
+            Err(anyhow::anyhow!(format!("Failed to mount project: {}", e)))
+        }
+    }
 }
