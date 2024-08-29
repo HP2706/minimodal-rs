@@ -32,7 +32,12 @@ where
     I: BaseBound,
     O: BaseBound,
 {
-    fn map(inputs: Vec<I>) -> Vec<Self::RemoteOutput>;
+    // keeps the futures in the vector
+    fn map_async(inputs: Vec<I>) -> Vec<Self::RemoteOutput>;
+
+    // returns a future that resolves to a vector of results
+    fn map(inputs: Vec<I>) -> Pin<Box<dyn Future<Output = Vec<O>> + Send>>;
+
 }
 
 pub trait StreamingFunction<I, O>: Function<I, O>

@@ -68,8 +68,8 @@ pub fn function_impl(_attr: TokenStream, item: TokenStream) -> TokenStream {
         &block
     );
 
-    let map_impl = generate_map_impl(&new_inp_type);
-
+    let map_impl = generate_map_impl(&new_inp_type, &output_type);
+    let map_async_impl = generate_map_async_impl(&new_inp_type);
 
     let stream_impl = generate_stream_impl(&new_inp_type);
     quote! {
@@ -84,27 +84,41 @@ pub fn function_impl(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
         impl #generics BatchFunction<#new_inp_type, #output_type> for #fn_name #generics #where_clause {
             #map_impl
+            #map_async_impl
         }
 
         impl #generics StreamingFunction<#new_inp_type, #output_type> for #fn_name #generics #where_clause {
             #stream_impl
         }
+
     }.into()
 }
 
 /// generates the impl for the map function if 
 /// the input type is iterable else returns empty impl
-fn generate_map_impl(
+fn generate_map_async_impl(
     new_inp_type: &TokenStream2,
 ) -> TokenStream2 {
 
     quote! {
-        fn map(inputs: Vec<#new_inp_type>) -> Vec<Self::RemoteOutput> {
+        fn map_async(inputs: Vec<#new_inp_type>) -> Vec<Self::RemoteOutput> {
             inputs.into_iter().map(
                 |x| {
                     Self::remote(x)
                 }
             ).collect()
+        }
+    }
+}
+
+fn generate_map_impl(
+    new_inp_type: &TokenStream2,
+    output_type: &Type,
+) -> TokenStream2 {
+    quote! {
+        fn map(inputs: Vec<#new_inp_type>) -> Pin<Box<dyn Future<Output = Vec<#output_type>> + Send>> {
+            let futures = inputs.into_iter().map(|x| Self::remote(x));
+            Box::pin(futures::future::join_all(futures))
         }
     }
 }
