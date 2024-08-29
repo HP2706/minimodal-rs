@@ -1,4 +1,3 @@
-
 use proc_macro::{TokenStream};
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, format_ident};
@@ -43,9 +42,6 @@ pub fn function_impl(_attr: TokenStream, item: TokenStream) -> TokenStream {
         ReturnType::Default => panic!("Output type must be of type Result<_, MiniModalError>"),
     };
 
-
-    //join the names of all input args
-
     // phantom fields for generic types unused by the struct
     let phantom_fields = generics.params.iter()
         .filter_map(|param| match param {
@@ -72,6 +68,12 @@ pub fn function_impl(_attr: TokenStream, item: TokenStream) -> TokenStream {
         &block
     );
 
+
+    let map_impl = generate_map_impl(
+        &output_type,
+        &new_inp_type,
+    );
+
     quote! {
         #vis struct #fn_name #generics #where_clause {
             #(#phantom_fields)*
@@ -80,8 +82,29 @@ pub fn function_impl(_attr: TokenStream, item: TokenStream) -> TokenStream {
         impl #generics Function<#new_inp_type, #output_type> for #fn_name #generics #where_clause {
             #local_impl
             #remote_impl
+            #map_impl
         }
     }.into()
+}
+
+/// generates the impl for the map function if 
+/// the input type is iterable else returns empty impl
+fn generate_map_impl(
+    output_type: &Type,
+    new_inp_type: &TokenStream2,
+) -> TokenStream2 {
+
+    quote! {
+        fn map(inputs: Vec<#new_inp_type>) -> Result<Vec<Self::RemoteOutput>, MiniModalError> {
+            let futures = inputs.into_iter().map(
+                |x| {
+                    Self::remote(x)
+                }
+            ).collect();
+
+            Ok(futures)
+        }
+    }
 }
 
 fn generate_local_impl(
@@ -92,6 +115,17 @@ fn generate_local_impl(
     block: &syn::Block,
 ) -> TokenStream2 {
     let new_input_ident = generate_new_input_ident(&input_idents);
+    
+    // Add this block to check the return type
+    let block_return_type = infer_block_return_type(block);
+    /* if !types_match(output_type, &block_return_type) {
+        return syn::Error::new(
+            Span::call_site(),
+            format!("Function body returns {:?}, but the declared return type is {:?}", 
+                    block_return_type, output_type)
+        ).to_compile_error();
+    } */
+
     if is_async {
         quote! {
             type LocalOutput = Pin<Box<dyn Future<Output = #output_type> + Send + 'static>>;
@@ -187,4 +221,42 @@ fn generate_remote_block(
             RunFunctionResult::Error(error) => Err(MiniModalError::FunctionError(error)),
         }
     }
+}
+
+// Add these helper functions
+fn infer_block_return_type(block: &syn::Block) -> Type {
+    // This is a simplified version. You might need a more sophisticated
+    // analysis for complex blocks.
+    if let Some(syn::Stmt::Expr(expr, _)) = block.stmts.last() {
+        expr_to_type(expr)
+    } else {
+        syn::parse_quote!(())
+    }
+}
+
+fn expr_to_type(expr: &syn::Expr) -> Type {
+    match expr {
+        syn::Expr::Call(call) => {
+            // Assume the return type of the call is the type of the first argument
+            if let syn::Expr::Path(path) = &*call.func {
+                if let Some(segment) = path.path.segments.last() {
+                    if segment.ident == "Ok" || segment.ident == "Err" {
+                        if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
+                            if let Some(syn::GenericArgument::Type(t)) = args.args.first() {
+                                return t.clone();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // Add more cases as needed
+        _ => {}
+    }
+    syn::parse_quote!(())
+}
+
+fn types_match(declared: &Type, actual: &Type) -> bool {
+    // This is a simplified comparison. You might need to handle more cases.
+    format!("{:?}", declared) == format!("{:?}", actual)
 }

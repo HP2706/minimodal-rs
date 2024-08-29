@@ -43,5 +43,7 @@ async-trait = "0.1.81"
 polars = { version = "0.42.0", features = ["serde"] }
 rstest = "0.22.0"
 uuid = { version = "1.10.0", features = ["v4"] }
+rayon = "1.10.0"
+futures = "0.3.30"
 [build-dependencies]
 tonic-build = "0.9"

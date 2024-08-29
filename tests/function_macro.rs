@@ -54,6 +54,12 @@ async fn df_test_deserialize(df: PolarsDataFrame) -> Result<PolarsDataFrame, Min
     Ok(df)
 }
 
+
+#[function]
+async fn map_fn(a: i32) -> Result<i32, MiniModalError> {
+    Ok(a)
+}
+
 #[rstest]
 #[case::local((lala::<i32>::local, 1))]
 #[case::remote((lala::<i32>::remote, 1))]
@@ -71,3 +77,23 @@ where
     let result = process_call((func_input.0)(func_input.1)).await;
     assert!(result);
 }
+
+
+#[rstest]
+#[case::map((map_fn::map, vec![1, 2, 3]))]
+#[tokio::test]
+async fn test_map_fn<F, I, O>(
+    #[case] func_input: (F, I)
+) 
+where
+    I: Serialize + for<'de> Deserialize<'de> + Send + Sync + Debug + 'static,
+    O: Serialize + for<'de> Deserialize<'de> + Send + Sync + Debug + 'static,
+    F: Fn(I) -> Result<Vec<Pin<Box<dyn Future<Output = Result<O, MiniModalError>> + Send>>>, MiniModalError> + Send + 'static,
+{
+    let results = (func_input.0(func_input.1));
+    match results {
+        Ok(r) => assert!(r.len() == 3),
+        Err(e) => assert!(false),
+    }
+}
+
