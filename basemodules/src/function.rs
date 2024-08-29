@@ -2,8 +2,10 @@ use std::fmt::Debug;
 use serde::{Serialize, Deserialize};
 use std::future::Future;
 use std::iter::IntoIterator;
-use rayon::prelude::*;
 use crate::MiniModalError;
+use futures::Stream;
+use std::pin::Pin;
+
 // New trait to encapsulate common requirements
 pub trait BaseBound: Serialize + for<'de> Deserialize<'de> + Send + Sync + Debug + 'static {}
 
@@ -22,13 +24,27 @@ where
     type RemoteOutput: Future<Output = O> + Send;
     
     fn local(input: I) -> Self::LocalOutput;
-    
-    fn map(inputs : Vec<I>) -> Result<Vec<Self::RemoteOutput>, MiniModalError>;
-    
     fn remote(input: I) -> Self::RemoteOutput;
 }
 
+pub trait BatchFunction<I, O>: Function<I, O>
+where
+    I: BaseBound,
+    O: BaseBound,
+{
+    fn map(inputs: Vec<I>) -> Vec<Self::RemoteOutput>;
+}
 
+pub trait StreamingFunction<I, O>: Function<I, O>
+where
+    I: BaseBound,
+    O: BaseBound,
+{
+    type InputStream: Stream<Item = I> + Send;
+    type OutputStream: Stream<Item = Self::RemoteOutput> + Send;
+
+    fn map_stream(input: Self::InputStream) -> Self::OutputStream;
+}
 
 //TODO implement LocalResult that can take a future and return the value
 pub trait LocalResult<T: Send + Sync>: Send {

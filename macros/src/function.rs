@@ -68,12 +68,10 @@ pub fn function_impl(_attr: TokenStream, item: TokenStream) -> TokenStream {
         &block
     );
 
+    let map_impl = generate_map_impl(&new_inp_type);
 
-    let map_impl = generate_map_impl(
-        &output_type,
-        &new_inp_type,
-    );
 
+    let stream_impl = generate_stream_impl(&new_inp_type);
     quote! {
         #vis struct #fn_name #generics #where_clause {
             #(#phantom_fields)*
@@ -82,7 +80,14 @@ pub fn function_impl(_attr: TokenStream, item: TokenStream) -> TokenStream {
         impl #generics Function<#new_inp_type, #output_type> for #fn_name #generics #where_clause {
             #local_impl
             #remote_impl
+        }
+
+        impl #generics BatchFunction<#new_inp_type, #output_type> for #fn_name #generics #where_clause {
             #map_impl
+        }
+
+        impl #generics StreamingFunction<#new_inp_type, #output_type> for #fn_name #generics #where_clause {
+            #stream_impl
         }
     }.into()
 }
@@ -90,19 +95,30 @@ pub fn function_impl(_attr: TokenStream, item: TokenStream) -> TokenStream {
 /// generates the impl for the map function if 
 /// the input type is iterable else returns empty impl
 fn generate_map_impl(
-    output_type: &Type,
     new_inp_type: &TokenStream2,
 ) -> TokenStream2 {
 
     quote! {
-        fn map(inputs: Vec<#new_inp_type>) -> Result<Vec<Self::RemoteOutput>, MiniModalError> {
-            let futures = inputs.into_iter().map(
+        fn map(inputs: Vec<#new_inp_type>) -> Vec<Self::RemoteOutput> {
+            inputs.into_iter().map(
                 |x| {
                     Self::remote(x)
                 }
-            ).collect();
+            ).collect()
+        }
+    }
+}
 
-            Ok(futures)
+fn generate_stream_impl(
+    new_inp_type: &TokenStream2,
+) -> TokenStream2 {
+    quote! {
+        type InputStream = Pin<Box<dyn Stream<Item = #new_inp_type> + Send>>;
+        type OutputStream = Pin<Box<dyn Stream<Item = Self::RemoteOutput> + Send>>;
+        fn map_stream(input: Self::InputStream) -> Self::OutputStream {
+            Box::pin(
+                input.map(|x| Self::remote(x))
+            )
         }
     }
 }
@@ -142,6 +158,7 @@ fn generate_local_impl(
         }
     }
 }
+
 
 fn generate_new_input_ident(input_idents: &Vec<Ident>) -> Ident {
     format_ident!(

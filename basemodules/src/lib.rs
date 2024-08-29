@@ -1,5 +1,5 @@
 pub mod function;
-pub use function::{Function};
+pub use function::{Function, BatchFunction, StreamingFunction};
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 #[derive(Debug, Serialize, Deserialize, Clone)]

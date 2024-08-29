@@ -8,7 +8,8 @@ However, at some point, other languages will likely need to be supported, and I 
 1. Rust is statically typed, which means you avoid a whole set of runtime errors that you would have to gradually eliminate in Python.
     generally the thing that annoys me most when using modal is 
     getting dumb runtime errors that could easily have been avoided with a compiler
-2. Rust is becoming more popular in data engineering.
+
+2. Rust is becoming more popular in data engineering and i think it is sufficiently different from python that it is worth exploring what a rust-first-class modal might look like. 
 
 This repo is an exploration of what Modal might look like in Rust. 
 
