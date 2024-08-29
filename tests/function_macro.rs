@@ -10,10 +10,11 @@ use basemodules::MiniModalError;
 use serde::{Deserialize, Serialize};
 use std::pin::Pin;
 use std::future::Future;
-use basemodules::function::Function;
+use basemodules::function::{Function, StreamingFunction, BatchFunction};
 use std::fmt::Debug;
 use rstest::*;
 use polars::prelude::*;
+use futures::{StreamExt, Stream};
 
 async fn process_call<F, O>(call: F) -> bool
 where
