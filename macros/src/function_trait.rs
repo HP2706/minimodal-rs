@@ -37,7 +37,6 @@ fn generate_local_impl(
     }
 }
 
-
 fn generate_new_input_ident(input_idents: &Vec<Ident>) -> Ident {
     format_ident!(
         "{}", 
@@ -59,6 +58,7 @@ fn generate_remote_impl(
         new_inp_type, 
         output_type, 
         input_idents, 
+        types_and_names,
         .. 
     } = macro_builder;
 
@@ -70,7 +70,6 @@ fn generate_remote_impl(
             RunFunctionResponse,
             RunFunctionRequest
         };
-        use serde_json;
         use tonic::{Request, Status, Streaming};
         use serde_json;
         use minimodal_rs::utilities::serialize_inputs;
@@ -83,12 +82,16 @@ fn generate_remote_impl(
             .await
             .map_err(|e| MiniModalError::from(anyhow::Error::from(e)))?;
 
-
-
-        let request  = Request::new(RunFunctionRequest {
+        let serialized_inputs = serialize_inputs(
+            &[#(stringify!(#input_idents)),*], 
+            &[#(&(#input_idents) as &dyn erased_serde::Serialize),*]
+        )?;
+            
+        
+        let request = Request::new(RunFunctionRequest {
             function_id: stringify!(#fn_name).to_string(),
-            serialized_inputs: "".to_string(),
-            field_types: vec![],
+            serialized_inputs : serialized_inputs,
+            field_types: vec![#(#types_and_names),*],
             output_type: stringify!(#output_type).to_string()
         });
 
@@ -97,12 +100,14 @@ fn generate_remote_impl(
             .map_err(|e| MiniModalError::from(anyhow::Error::from(e)))?
             .into_inner();
 
+        println!("response_stream: {:?}", response_stream);
+
         while let Some(response) = response_stream.next().await {
             let response = response.map_err(|e| MiniModalError::from(anyhow::Error::from(e)))?;
             match response.response {
                 Some(Response::Result(task_result)) => {
                     if task_result.success {
-                        serde_json::from_str(&task_result.message)
+                        return serde_json::from_str(&task_result.message)
                             .map_err(|e| MiniModalError::SerializationError(e.to_string()))
                     } else {
                         return Err(MiniModalError::FunctionError(task_result.message));

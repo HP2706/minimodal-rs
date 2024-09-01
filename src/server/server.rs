@@ -91,117 +91,108 @@ impl MiniModal for MiniModalService {
         request: Request<RunFunctionRequest>,
     ) -> Result<Response<Self::RunFunctionStream>, Status> {
         let req = request.into_inner();
-        let (tx, rx) = mpsc::channel(4);
-        let logger = Logger::new(&tx);
+        let (tx, rx) = mpsc::channel(100);
+        let logger = Logger::new(tx.clone(), self.project_dir_path.clone());
 
-        logger.log(&format!("🏃‍ Running function: {}", req.function_id)).await;
-
-        let project_dir_path = self.project_dir_path.clone();
-
-        logger.log(&format!("📦 Loading app: {}", project_dir_path)).await;
-
-        // Correctly construct the path to the main.rs file
-        let original_main_file_path = format!("{}/src/original_main.rs", project_dir_path);
-        logger.log(&format!("👉 Reading main file from {}", original_main_file_path)).await;
-
-        // Read the original Rust file
-        let original_code = fs::read_to_string(&original_main_file_path)
-            .map_err(|e| Status::internal(format!("Failed to read file: {}", e)))?;
-
-        let deserialized_inputs: Value = serde_json::from_str(&req.serialized_inputs)
-            .map_err(|e| Status::internal(format!("Failed to deserialize inputs: {}", e)))?;
-        // Modify the main function to return the result as JSON
-
-        let str_field_types = req.field_types.iter().map(|field| (field.name.clone(), field.ty.clone())).collect::<Vec<(String, String)>>();
-
-        let let_declarations = _declare_values_from_json(
-            &deserialized_inputs, 
-            &str_field_types
-        ).map_err(|e| Status::internal(format!("Failed to declare values: {}", e)))?;
-
-        let main_code = format_code(
-            original_code, 
-            deserialized_inputs, 
-            let_declarations, 
-            str_field_types, 
-            &req
-        );
-
-        let name = uuid::Uuid::new_v4().to_string();
-        logger.log(&format!("👉 Writing bin file to {}", project_dir_path)).await;
-
-        let _ = write_bin_file(&name, &main_code, &project_dir_path.clone().into()) 
-            .map_err(|e| Status::internal(format!("Failed to write bin file: {}", e)))?;
-        
-        // Compile and run the code using duct
-        logger.log(&format!("project_dir_path: {}", project_dir_path)).await;
-        let cmd = cmd!("cargo", "run", "--bin", &name)
-            .dir(&project_dir_path)
-            .stdout_capture()
-            .stderr_capture();
-
-        let output = cmd.run().map_err(|e| Status::internal(format!("Failed to run cargo: {}", e)))?;
-
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let stderr = String::from_utf8_lossy(&output.stderr);
-
-        let response_stream = ReceiverStream::new(rx);
-
-
-
-            for line in stdout.lines() {
-                if tx.send(Ok(RunFunctionResponse {
-                    response: Some(RunFunctionResult::LogLine(line.to_string())),
-                })).await.is_err() {
-                    break;
-                }
+        tokio::spawn(async move {
+            if let Err(e) = process_function(req, logger).await {
+                let _ = tx.send(Ok(RunFunctionResponse {
+                    response: Some(RunFunctionResult::Result(TaskResult {
+                        success: false,
+                        message: format!("Error: {}", e),
+                    })),
+                })).await;
             }
+        });
 
-            if !output.status.success() {
-                let error_message = format!("cargo run failed: {}", stderr);
-                println!("🔥 Error: {}", error_message);
-                logger.log(&error_message).await;
-            } else {
-                let result = stdout
-                    .split("RESULT_START")
-                    .nth(1)
-                    .and_then(|s| s.split("RESULT_END").next())
-                    .unwrap_or_else(|| "");
-
-                let json_result: serde_json::Value = serde_json::from_str(result).unwrap_or_else(|_| json!({}));
-
-                let response = if let Some(success) = json_result.get("success") {
-                    RunFunctionResponse {
-                        response: Some(RunFunctionResult::Result(TaskResult {
-                            success: true,
-                            message: success.to_string(),
-                        })),
-                    }
-                } else if let Some(error) = json_result.get("error") {
-                    RunFunctionResponse {
-                        response: Some(RunFunctionResult::Result(TaskResult {
-                            success: false,
-                            message: error.to_string(),
-                        })),
-                    }
-                } else {
-                    RunFunctionResponse {
-                        response: Some(RunFunctionResult::Result(TaskResult {
-                            success: false,
-                            message: "Invalid JSON result structure".to_string(),
-                        })),
-                    }
-                };
-
-                let _ = tx.send(Ok(response)).await;
-            }
-
-        Ok(Response::new(Box::pin(response_stream) as Self::RunFunctionStream))
+        let stream = ReceiverStream::new(rx);
+        Ok(Response::new(Box::pin(stream) as Self::RunFunctionStream))
     }
 }
 
+async fn process_function(req: RunFunctionRequest, logger: Logger) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    logger.log(&format!("🏃‍ Running function: {}", req.function_id)).await?;
 
+    let project_dir_path = logger.project_dir_path.clone();
+    logger.log(&format!("📦 Loading app: {}", project_dir_path)).await?;
 
+    let original_main_file_path = format!("{}/src/original_main.rs", project_dir_path);
+    logger.log(&format!("👉 Reading main file from {}", original_main_file_path)).await?;
+
+    let original_code = fs::read_to_string(&original_main_file_path)?;
+
+    let deserialized_inputs: Value = serde_json::from_str(&req.serialized_inputs)?;
+    logger.log(&format!("🔍 Deserialized inputs: {:?}", deserialized_inputs)).await?;
+
+    let str_field_types = req.field_types.iter().map(|field| (field.name.clone(), field.ty.clone())).collect::<Vec<(String, String)>>();
+    logger.log(&format!("🔍 Field types: {:?}", str_field_types)).await?;
+
+    let let_declarations = _declare_values_from_json(&deserialized_inputs, &str_field_types)
+        .map_err(|e| Status::internal(e.to_string()))?;
+
+    let main_code = format_code(original_code, deserialized_inputs, let_declarations, str_field_types, &req);
+
+    let name = uuid::Uuid::new_v4().to_string();
+    logger.log(&format!("👉 Writing bin file to {}", project_dir_path)).await?;
+
+    write_bin_file(&name, &main_code, &project_dir_path.clone().into())?;
+
+    logger.log(&format!("project_dir_path: {}", project_dir_path)).await?;
+    let output = tokio::process::Command::new("cargo")
+        .args(&["run", "--bin", &name])
+        .current_dir(&project_dir_path)
+        .output()
+        .await?;
+
+    logger.log(&format!("output: {:?}", output)).await?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    for line in stdout.lines() {
+        logger.log(line).await?;
+    }
+
+    if !output.status.success() {
+        let error_message = format!("cargo run failed: {}", stderr);
+        logger.log(&format!("🔥 Error: {}", error_message)).await?;
+    } else {
+        let result = stdout
+            .split("RESULT_START")
+            .nth(1)
+            .and_then(|s| s.split("RESULT_END").next())
+            .unwrap_or("");
+
+        let json_result: serde_json::Value = serde_json::from_str(result).unwrap_or_else(|_| json!({}));
+
+        let response = if let Some(success) = json_result.get("success") {
+            RunFunctionResponse {
+                response: Some(RunFunctionResult::Result(TaskResult {
+                    success: true,
+                    message: success.to_string(),
+                })),
+            }
+        } else if let Some(error) = json_result.get("error") {
+            RunFunctionResponse {
+                response: Some(RunFunctionResult::Result(TaskResult {
+                    success: false,
+                    message: error.to_string(),
+                })),
+            }
+        } else {
+            RunFunctionResponse {
+                response: Some(RunFunctionResult::Result(TaskResult {
+                    success: false,
+                    message: "Invalid JSON result structure".to_string(),
+                })),
+            }
+        };
+
+        logger.send(response).await?;
+    }
+
+    Ok(())
+}
 
 fn format_code(
     original_code: String, 
@@ -252,22 +243,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>
     )
 }
 
-struct Logger<'a> {
-    tx: &'a mpsc::Sender<Result<RunFunctionResponse, Status>>,
+struct Logger {
+    tx: mpsc::Sender<Result<RunFunctionResponse, Status>>,
+    project_dir_path: String,
 }
 
-impl<'a> Logger<'a> {
-    pub fn new(tx: &'a mpsc::Sender<Result<RunFunctionResponse, Status>>) -> Logger<'a> {
-        Logger { tx }
+impl Logger {
+    pub fn new(tx: mpsc::Sender<Result<RunFunctionResponse, Status>>, project_dir_path: String) -> Logger {
+        Logger { tx, project_dir_path }
     }
 
-    pub async fn log(&self, message: &str) {
-        // print to console
+    pub async fn log(&self, message: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         println!("{}", message);
-
-        // send to client
-        let _ = self.tx.send(Ok(RunFunctionResponse {
+        self.send(RunFunctionResponse {
             response: Some(RunFunctionResult::LogLine(message.to_string())),
-        })).await;
+        }).await?;
+        Ok(())
+    }
+
+    pub async fn send(&self, response: RunFunctionResponse) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        self.tx.send(Ok(response)).await?;
+        Ok(())
     }
 }
