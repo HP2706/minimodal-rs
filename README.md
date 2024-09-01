@@ -74,12 +74,23 @@ We would then use the macro like so:
 ```rust
 #[function]
 async fn add(a: i32, b: i32) -> Result<i32, MiniModalError> {
-    a + b
+    Ok(a + b)
 }
 
 #[tokio::main]
 async fn main() {
-    let result = add::remote((1, 2)).await;
+    #[tokio::main]
+async fn main() {
+    let result1 = add::remote((1, 2)).await;
+    let result2 = add::map(vec![(3, 4), (5, 6), (7, 8)]).await;
+
+    let stream = stream::iter(vec![(9, 10), (11, 12), (13, 14)]);
+    
+    let result3 = add::map_stream(Box::pin(stream));
+    result3.for_each(|r| async move {
+        println!("{:?}", r.await);
+    }).await;
+}
 }
 ```
 
