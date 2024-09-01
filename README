@@ -3,30 +3,31 @@ This is a minimal implementation of modal in Rust inspired by Charles Frye's exc
 ## Motivation
 
 I think Modal is amazing, and Python is a perfect first use case. 
-However, at some point, other languages will likely need to be supported, and I think Rust is the best candidate.
+However, at some point, other languages will likely need to be supported, and I think Rust is the best candidate to be that second language.
 
-1. Rust is statically typed, which means you avoid a whole set of runtime errors that you would have to gradually eliminate in Python.
-    generally the thing that annoys me most when using modal is 
-    getting dumb runtime errors that could easily have been avoided with a compiler
+1. Rust is statically typed, which means you avoid a whole set of runtime errors that make developing with modal annoying.
+    Generally, the thing that annoys me most when using modal is 
+    getting dumb runtime errors that could easily have been avoided with a compiler.
 
-2. Rust is becoming more popular in data engineering and i think it is sufficiently different from python that it is worth exploring what a rust-first-class modal might look like. 
+2. Rust is becoming more popular in data engineering, and I think it is sufficiently different from Python that it is worth exploring what a Rust-first-class modal might look like. 
+
+3. Serverless orchestration of streaming data pipelines becomes, in my opinion, a lot more interesting in Rust.
 
 This repo is an exploration of what Modal might look like in Rust. 
 
 ## Downsides
-1. your environment on the server and client side has to be basically the same. IE you would not be able to do 
+1. Your environment on the server and client side has to be basically the same. IE you would not be able to do 
     ```rust
     with image.imports():
-        import package #not locally installed
+        import package # not locally installed
     ```
-2. compilation errors might be hard to deal with 
-
+2. Compilation errors might be hard to deal with. 
 
 ## Description
 As Rust is far less dynamic than Python, the implementation differs somewhat.
 
 Instead of using a decorator to wrap the function, we use a macro that transforms our function into a struct of the same name
-which implements the "Function" trait. The Function trait is defined as follows:
+which implements the "Function", "BatchFunction", and "StreamingFunction" traits. These traits are defined as follows:
 
 ```rust
 pub trait Function<I, O>
@@ -40,11 +41,34 @@ where
     fn local(input: I) -> Self::LocalOutput;
     fn remote(input: I) -> Self::RemoteOutput;
 }
+
+pub trait BatchFunction<I, O>: Function<I, O>
+where
+    I: BaseBound,
+    O: BaseBound,
+{
+    // keeps the futures in the vector
+    fn map_async(inputs: Vec<I>) -> Vec<Self::RemoteOutput>;
+
+    // returns a future that resolves to a vector of results
+    fn map(inputs: Vec<I>) -> Pin<Box<dyn Future<Output = Vec<O>> + Send>>;
+
+}
+
+pub trait StreamingFunction<I, O>: Function<I, O>
+where
+    I: BaseBound,
+    O: BaseBound,
+{
+    type InputStream: Stream<Item = I> + Send;
+    type OutputStream: Stream<Item = Self::RemoteOutput> + Send;
+
+    fn map_stream(input: Self::InputStream) -> Self::OutputStream;
+}
 ```
 
 Both the inputs and outputs must implement Serialize and Deserialize. This ensures that the arguments can be sent and received via gRPC.
-In Python, you can often end up getting pickle errors at runtime when the object you are sending or receiving cannot be deserialized or serialized. 
-Here, the contract is more explicit.
+In Python, you can often end up getting pickle errors at runtime when the object you are sending or receiving cannot be deserialized or serialized. Here, the contract is more explicit.
 
 We would then use the macro like so:
 
@@ -61,6 +85,6 @@ async fn main() {
 ```
 
 ## Foundational crates
-1. tonic for building code from proto api spec
+1. tonic for building code from proto API spec
 2. serde for defining serialization and deserialization format
 3. tokio for async
