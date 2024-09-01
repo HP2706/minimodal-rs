@@ -16,12 +16,12 @@ However, at some point, other languages will likely need to be supported, and I 
 This repo is an exploration of what Modal might look like in Rust. 
 
 ## Downsides
-1. Your environment on the server and client side has to be basically the same. IE you would not be able to do 
+1. Your environment on the server and client side has to be basically identical. IE you would not be able to do 
     ```rust
     with image.imports():
         import package # not locally installed
     ```
-2. Compilation errors might be hard to deal with. 
+2. Compilation errors might be hard to deal with if you have divergent versions of the code on the server and client side.
 
 ## Description
 As Rust is far less dynamic than Python, the implementation differs somewhat.

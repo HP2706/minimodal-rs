@@ -45,5 +45,9 @@ rstest = "0.22.0"
 uuid = { version = "1.10.0", features = ["v4"] }
 rayon = "1.10.0"
 futures = "0.3.30"
+futures-core = "0.3.30"
+tokio-stream = "0.1.15"
+duct = "0.13.7"
 [build-dependencies]
 tonic-build = "0.9"
+futures-core = "0.3.30"

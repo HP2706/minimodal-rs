@@ -59,15 +59,19 @@ fn generate_remote_impl(
         new_inp_type, 
         output_type, 
         input_idents, 
-        types_and_names,
         .. 
     } = macro_builder;
 
-
-    let remote_block_body =  quote! {
+    let remote_block_body = quote! {
         use basemodules::MiniModalError;
-        use minimodal_proto::proto::minimodal::{mini_modal_client::MiniModalClient, run_function_response::Result as RunFunctionResult, RunFunctionRequest};
-        use tonic::Request;
+        use minimodal_proto::proto::minimodal::{
+            mini_modal_client::MiniModalClient, 
+            run_function_response::Response, 
+            RunFunctionResponse,
+            RunFunctionRequest
+        };
+        use serde_json;
+        use tonic::{Request, Status, Streaming};
         use serde_json;
         use minimodal_rs::utilities::serialize_inputs;
         use minimodal_rs::mount::mount_project;
@@ -79,31 +83,40 @@ fn generate_remote_impl(
             .await
             .map_err(|e| MiniModalError::from(anyhow::Error::from(e)))?;
 
-        let serialized_inputs = serialize_inputs(
-            &[#(stringify!(#input_idents)),*], 
-            &[#(&(#input_idents) as &dyn erased_serde::Serialize),*]
-        )?;
 
-        let request = Request::new(RunFunctionRequest {
+
+        let request  = Request::new(RunFunctionRequest {
             function_id: stringify!(#fn_name).to_string(),
-            serialized_inputs,
-            field_types: vec![#(#types_and_names),*],
+            serialized_inputs: "".to_string(),
+            field_types: vec![],
             output_type: stringify!(#output_type).to_string()
         });
 
-        let response = client.run_function(request).await
+        let mut response_stream : Streaming<RunFunctionResponse> = 
+            client.run_function(request).await
             .map_err(|e| MiniModalError::from(anyhow::Error::from(e)))?
-            .into_inner()
-            .result
-            .ok_or_else(|| MiniModalError::OtherError("No result received".to_string()))?;
+            .into_inner();
 
-        match response {
-            RunFunctionResult::Success(success) => {
-                serde_json::from_str(&success)
-                    .map_err(|e| MiniModalError::SerializationError(e.to_string()))
+        while let Some(response) = response_stream.next().await {
+            let response = response.map_err(|e| MiniModalError::from(anyhow::Error::from(e)))?;
+            match response.response {
+                Some(Response::Result(task_result)) => {
+                    if task_result.success {
+                        serde_json::from_str(&task_result.message)
+                            .map_err(|e| MiniModalError::SerializationError(e.to_string()))
+                    } else {
+                        return Err(MiniModalError::FunctionError(task_result.message));
+                    }
+                }
+                Some(Response::LogLine(line)) => {
+                    println!("log: {}", line);
+                }
+                None => {
+                    return Err(MiniModalError::OtherError("No result received".to_string()));
+                }
             }
-            RunFunctionResult::Error(error) => Err(MiniModalError::FunctionError(error)),
         }
+        Err(MiniModalError::OtherError("Stream ended without result".to_string()))
     };
 
     quote! {

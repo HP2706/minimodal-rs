@@ -4,7 +4,7 @@ package minimodal;
 
 service MiniModal {
     rpc MountProject (MountProjectRequest) returns (MountProjectResponse);
-    rpc RunFunction (RunFunctionRequest) returns (RunFunctionResponse);
+    rpc RunFunction (RunFunctionRequest) returns (stream RunFunctionResponse);
 }
 
 message MountProjectRequest {
@@ -28,7 +28,6 @@ message name_and_type {
     string ty = 2;
 }
 
-
 message RunFunctionRequest {
     string function_id = 1;
     string serialized_inputs = 2;
@@ -37,8 +36,13 @@ message RunFunctionRequest {
 }
 
 message RunFunctionResponse {
-    oneof result {
-        string success = 1;
-        string error = 2;
-    }
+  oneof response {
+    string log_line = 1;
+    TaskResult result = 2;
+  }
+}
+
+message TaskResult {
+  bool success = 1;
+  string message = 2;
 }
