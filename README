@@ -47,12 +47,11 @@ where
     I: BaseBound,
     O: BaseBound,
 {
-    // keeps the futures in the vector
+    // Keeps the futures in the vector
     fn map_async(inputs: Vec<I>) -> Vec<Self::RemoteOutput>;
 
-    // returns a future that resolves to a vector of results
+    // Returns a future that resolves to a vector of results
     fn map(inputs: Vec<I>) -> Pin<Box<dyn Future<Output = Vec<O>> + Send>>;
-
 }
 
 pub trait StreamingFunction<I, O>: Function<I, O>
@@ -84,7 +83,8 @@ async fn main() {
 }
 ```
 
-## Foundational crates
-1. tonic for building code from proto API spec
-2. serde for defining serialization and deserialization format
-3. tokio for async
+## Main crates
+1. **tonic**: A gRPC framework for Rust, used to implement the client-server communication based on Protocol Buffers.
+2. **serde**: Provides serialization and deserialization for Rust data structures, ensuring efficient data transfer between client and server.
+3. **tokio**: An asynchronous runtime for Rust, powering the concurrent execution of tasks and handling of I/O operations.
+4. **prost**: Works alongside tonic to compile Protocol Buffer definitions into Rust code.
